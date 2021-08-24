@@ -11,10 +11,19 @@ Por meio do Script config.sh teremos o CAN Bus virtual e poderemos inicializar o
 # Configuração pata a habilitação das conexões:
 Para efetuar a conexão basta realizar o download da toolchain , assim será possível compilar no formato do colibri. Em seguida é necessário baixar e editar os arquivos a serem compilados e definir o Kernel.
 
+# Testando o CAN
+
+Para a comunicação CAN é necessária a instalação do CANopen, sendo necessário rodar em pelo menos 4 terminais diferentes. cada terminal com uma função. O terminal 1 para a função de comuniação, o trminal 2 para a criação do nó master, o terminal 3 para o nó servo e o terminal 4 para a transferência de comandos via cocomm. Para instalar basta acessar o lin a seguir:
+
+
+https://opensource.lely.com/canopen/docs/installation/
+
+<hr>
+
 
 # Configuração de arquivos do CANopenNode
 
-Para fazer o CANopenNode funcionar será necessário adicionar a função cocomm no terminal  como segue abaixo:
+Para fazer o CANopenNode funcionar é preciso a função cocomm no terminal  como segue abaixo:
 ```sh
 ~$ cd embarcados2021
 ~/embarcados2021/ git init
@@ -41,15 +50,6 @@ Função demoLinuxDevice.
 Para criar um nó para a rede CAN utilize o OD, isso aumenta a liberdade para as capacidades dos nós. Depois disso, altere os valores dos parâmetros de comunicação PDO e os de mapeamento PDO.  valores 1400(4) e 1800(4) seguido de 1600(4) e 1A00(4) respectivamente. 
 
 
-
-<hr>
-
-# Testando o CAN
-
-Para a comunicação CAN é necessária a instalação do CANopen, sendo necessário rodar em pelo menos 4 terminais diferentes. cada terminal com uma função. O terminal 1 para a função de comuniação, o trminal 2 para a criação do nó master, o terminal 3 para o nó servo e o terminal 4 para a transferência de comandos via cocomm. Para instalar basta acessar o lin a seguir:
-
-
-https://opensource.lely.com/canopen/docs/installation/
 
 <hr>
 
