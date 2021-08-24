@@ -1,62 +1,20 @@
 # Projeto de acionamento de motor e comunicação com encoder para a movimentação ponto a ponto de um eixo de robo de reabilitação de um grau de liberdade
 
-Para encontrar o projeto, basta acessar a pasta /Projeto-braco e para o devido funcionamento dos códigos contidos nesta pasta, é necessária a instalação do CANopen.
-
 <hr>
 
-Por meio do Script config.sh teremos o CAN Bus virtual e poderemos inicializar os 3 nós para o uso do comando cocomm.
 
-As threads foram utilizadas para permitir a comunicação e é possível integrar os scripts que usam essas threads aos códigos em C.
+# Conexão:
 
-
-# Configuração do linux da Toradex Colibri VFxx para a habilitação das conexões CANtx
-
-Faça o download da toolchain que para permitir a compilação no formato da Colibri.
-
-```sh
-$ cd <pasta que você desejar deixar salvo>
-$ wget -O gcc-linaro-7.3.1-2018.05-x86_64_arm-linux-gnueabihf.tar.xz "https://releases.linaro.org/components/toolchain/binaries/7.3-2018.05/arm-linux-gnueabihf/gcc-linaro-7.3.1-2018.05-x86_64_arm-linux-gnueabihf.tar.xz"
-$ tar xvf gcc-linaro-7.3.1-2018.05-x86_64_arm-linux-gnueabihf.tar.xz
-$ ln -s gcc-linaro-7.3.1-2018.05-x86_64_arm-linux-gnueabihf gcc-linaro
-$ nano export_compiler
-# digita
-	export ARCH=arm
-	export PATH=~/gcc-linaro/bin/:$PATH
-	export CROSS_COMPILE=arm-linux-gnueabihf-
-#ctrl+x s enter, para salvar
-$ source export_compiler
-```
+Por meio do Script config.sh teremos o CAN Bus virtual e poderemos inicializar os 3 nós para o uso do comando cocomm. As threads foram utilizadas para permitir a comunicação e é possível integrar os scripts que usam essas threads aos códigos em C.
 
 
-Agora basta baixar e editar os arquivos que serão ser compilados e definir o Kernel.
+# Configuração pata a habilitação das conexões:
+Para efetuar a conexão basta realizar o download da toolchain , assim será possível compilar no formato do colibri. Em seguida é necessário baixar e editar os arquivos a serem compilados e definir o Kernel.
 
-```sh
-$ cd <pasta onde você desejar>
-#No nosso caso <branch> foi tordex_vf_4.4, mas isso depende da sua versão, isso é explicado mais a fundo em developer.toradex.com
-$ git clone -b <branch> git://git.toradex.com/linux-toradex.git
-```
-
-Abra o seguinte endereço: ~/linux-toradex/arch/arm/boot/dts/vf-colibri-eval-v3.dtsi 
-
-<ol>
-<li>Altere o status do i2c0 de "okay" para "disabled" (linha 136)</li>
-<li>Adicione as linhas a seguir acima de "&i2c0 {" (linha 135)
-	<p> &can0 {<br>
-       	status = "okay";<br>
-				};</p></li>
-<li>Agora digite no terminal:
-<p>~$ cd linux-toradex <br>
-~/linux-toradex/ make colibri_vf_defconfig
-~/linux-toradex/ make
-</p>
-</li>
-</ol>
-
-<hr>
 
 # Configuração de arquivos do CANopenNode
 
-Para fazer o CANopenNode funcionar vamos usar os comandos a seguir:
+Para fazer o CANopenNode funcionar será necessário adicionar a função cocomm no terminal  como segue abaixo:
 ```sh
 ~$ cd embarcados2021
 ~/embarcados2021/ git init
@@ -80,11 +38,7 @@ Função demoLinuxDevice.
 
 
 
-Para criar um nó para a rede CAN é necessário utilizar o OD, não sendo necessário, portanto alterar os aquivos de cima. A modificação no OD garante maior liberdade para as capacidades dos nós.
-
-<i>/CANopenDemo/demo/OD.c</i>
-
-Por fim, basta alterar os valores dos parâmetros de comunicação PDO e os de mapeamento PDO.  valores 1400(4) e 1800(4) seguido de 1600(4) e 1A00(4) respectivamente. 
+Para criar um nó para a rede CAN utilize o OD, isso aumenta a liberdade para as capacidades dos nós. Depois disso, altere os valores dos parâmetros de comunicação PDO e os de mapeamento PDO.  valores 1400(4) e 1800(4) seguido de 1600(4) e 1A00(4) respectivamente. 
 
 
 
@@ -92,59 +46,10 @@ Por fim, basta alterar os valores dos parâmetros de comunicação PDO e os de m
 
 # Testando o CAN
 
-Para a comunicação CAN é necessária a instalação das seguintes ferramentas:
+Para a comunicação CAN é necessária a instalação do CANopen, sendo necessário rodar em pelo menos 4 terminais diferentes. cada terminal com uma função. O terminal 1 para a função de comuniação, o trminal 2 para a criação do nó master, o terminal 3 para o nó servo e o terminal 4 para a transferência de comandos via cocomm. Para instalar basta acessar o lin a seguir:
 
-CANopen:
+
 https://opensource.lely.com/canopen/docs/installation/
-
-```sh
-~$ sudo apt-get update
-~$ git clone https://github.com/CANopenNode/CANopenDemo.git
-~$ cd CANopenDemo
-~/CANopenDemo/$ git submodule update --init --recursive
-```
-
-É necessário rodar em pelo menos 4 terminais diferentes: 
-
-> Terminal 1
-```sh
-# Função de comunicação
-~$ cd CANopenDemo/CANopenLinux/cocomm/
-~CANopenDemo/CANopenLinux/cocomm/$ make
-~CANopenDemo/CANopenLinux/cocomm/$ sudo make install
-~CANopenDemo/CANopenLinux/cocomm/$ cd
-# Início do barramento virtual can0 
-~$ sudo modprobe vcan
-~$ sudo ip link add dev can0 type vcan
-~$ sudo ip link set up can0
-#Recepção dos envios do barramento 
-~$ candump can0
-```
-
-> Terminal 2
-```sh
-# Criação de nó "master"
-~$ cd CANopenDemo/CANopenLinux/
-~/CANopenDemo/CANopenLinux/$ make
-~/CANopenDemo/CANopenLinux/$ rm *.persist
-~/CANopenDemo/CANopenLinux/$ ./canopend can0 -i 1 -c "local-/tmp/CO_command_socket"
-# É possível a criação de vários nós aqui  "./canopend (Barramento -i id-Nó)"
-```
-
-> Terminal 3
-```sh
-# Nó "servo"
-~$ cd CANopenDemo/demo/
-~/CANopenDemo/demo/$ make
-~/CANopenDemo/demo/$ rm *.persist
-~/CANopenDemo/demo/$ ./demoLinuxDevice can0
-```
-
-> Terminal 4
-```sh
-#Transferência de commandos via cocomm
-~$ cocomm "help"
-```
 
 <hr>
 
