@@ -235,20 +235,31 @@ Para o nosso projeto os Index e SubIndex a serem utilizados deverão seguir os p
 Dessa forma, para criar um nó para a rede CAN é necessário utilizar o OD, isso aumenta a liberdade para as capacidades dos nós. Depois disso, é preciso alterar os valores dos parâmetros de comunicação PDO e os de mapeamento PDO.  Os valores são 1400(4) e 1800(4) seguido de 1600(4) e 1A00(4) respectivamente. 
 
 <hr>
+# Arquivo do projeto final:
+
+A ideia dos códigos do projeto final é fazer com que programa inicialize os nós, depois inicialize as trheads de comunicação e chamada de função, segurar a comunicação e depois encerrar os scripts dos nós.
+Os códigos contidos, portanto no projeto final são combinações de funções prontas sem a alteração de parâmetros para o caso do nosso projeto.
+Os trechos dos códigos de de erro e conversão de ddp, constidos em motor.c, encoder.c e projetofinal.c são de autoria de outro grupo. O link do projeto do gripo está no final do readme.
+No final das contas não foi possível rodar os códigos, portanto não é possível saber se os mesmos estão funcionando corretamente para uma aplicação prática do módulo.
 
 # Referências e outros links:
 
 > Git com os arquivos do CANopenDemo, de onde fizemos o git clone e de onde baseamos este projeto:
-https://github.com/CANopenNode/CANopenDemo
+> https://github.com/CANopenNode/CANopenDemo
+
+> Tutorial Lely:
+> https://opensource.lely.com/canopen/docs/cmd-tutorial/
 
 >Onde vimos como usar o CAN no Colibri:
 >https://developer.toradex.com/knowledge-base/can-controller-area-network-on-colibri-module#CAN_on_Colibri_VFxx
 
 > Habilitação do CAN na toradex Colibri VFxx <br>
-https://developer.toradex.com/knowledge-base/can-linux#Kernel_Support_Colibri_VFxx
+> https://developer.toradex.com/knowledge-base/can-linux#Kernel_Support_Colibri_VFxx
 
 > Criação da Build do kernel e onde conseguimos os arquivos do git toradex <br>
-https://developer.toradex.com/knowledge-base/build-u-boot-and-linux-kernel-from-source-code
+> https://developer.toradex.com/knowledge-base/build-u-boot-and-linux-kernel-from-source-code
 
 > Este projeto foi feito em parceria com o de outro grupo de colegas da turma =D
 https://github.com/KingCoolgate/projetoEmbarcados2021
+
+
