@@ -59,7 +59,7 @@ void * minha_thread_3(void *apelido) {
 	pthread_exit(NULL);
 }
 
-// AQUI O PROGRAMA CONFIGURA AS PORTAS - FUNÇÕES ORIUNDAS DA TORADEX
+// AQUI O PROGRAMA CONFIGURA AS PORTAS - FUNÇÕES ORIUNDAS DA TORADEX SOBRE AS CONFIGURAÇÕES DE GPIO
 
 int portConfig(int argc, char *argv[]){
 	int fd;
@@ -85,14 +85,14 @@ int portConfig(int argc, char *argv[]){
   return EXIT_SUCCESS;
 }
 
-// CÁLCULO DE TENSÃO 
+// CÁLCULO DE TENSÃO - TRECHO OBTIDO POR COMPARTILHAMENTO DE OUTRO PROJETO QUE SE ENCONTRA NO FINAL DO Readme
 
 int calculoTensao(posicaoFinal, posicaoInicial){
 	erro = math.abs(posicaoFinal - posicaoInicial);
 	ddp = erro*coef + correcao;
 }
 
-///FUNÇÃO PRINCIPAL DE CRIAÇÃO DE NÓS - É UMA FUNÇÃO DO PROGRAMA THREADS.C
+///FUNÇÃO PRINCIPAL DE CRIAÇÃO DE NÓS - É UMA FUNÇÃO ORIGINAL DO PROGRAMA threads.c
 
 int main(int argc, char *argv[]) {
 
