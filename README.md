@@ -225,23 +225,95 @@ Por fim, basta apertar enter para conferir que o mestre está recebendo os PDOs
 
 # Conexão:
 
-A partir de agora utilizaremos a comunicação com base no CANopenNode tutorial, o qual se encontra na pasta do nosso repositório.
-Para fazer o CANopenNode funcionar é preciso a função cocomm no terminal.
-Por meio do Script config.sh teremos o CAN Bus virtual e poderemos inicializar os 3 nós para o uso do comando cocomm. As threads foram utilizadas para permitir a comunicação e é possível integrar os scripts que usam essas threads aos códigos em C.
+A partir de agora utilizaremos a comunicação com base no CANopenNode tutorial, o qual se encontra na pasta do nosso repositório.Assume-se aqui que o tutorial acima foi realizado, existindo portanto uma rede CAN virtual
+
+Criaremos mestre e escravo: em um novo terminal
+```
+~$ cd <caminho até a pasta>/embarcados2021/CANopenDemo/CANopenLinux/
+
+~$ make
+# Compila de acordo com o arquivo Makefile, não é necessário mexer nele 
+~$ ./canopend can0 -i 1 -c "local-/tmp/CO_command_socket"
+#gera um mestre na rede can0 com id 1 
+```
+No processo de embarcar os códigos, haverá a necessidade de mudar o caminho "local-/tmp/CO_command_socket". Para que o cocomm saiba onde enviar suas instruções, é necessário que o caminho para o socket seja informado ao programa.Isso pode ser feito com o seguinte comando:
+```
+export cocomm_socket= <caminho para o local do socket>
+```
+com isso será possível remanejar o socket para outro caminho ao embarcar o código.
+
+Para criar o escravo:
+```
+~$ cd <caminho até a pasta>/embarcados2021/CANopenDemo/demo/
+
+~/CANopenDemo/demo/$ make
+# Compila de acordo com o arquivo Makefile, não é necessário mexer nele 
+
+~/CANopenDemo/demo/$ ./demoLinuxDevice can0
+#Cria um escravo na mesma rede 
+```
+Em mais um outro terminal, utilizaremos o programa cocomm para enviar commandos á rede :
+```
+~$<caminho até a pasta>/CANopenDemo/CANopenLinux/cocomm/
+~$ sudo make
+~$ sudo make install
+#compilação e instalação do programa
+~$ cd 
+#Volta ao diretório home.Pode ser ignorada
+
+~$ cocomm "4 read 0x1017 0 u16"
+#Neste ponto, este comando retorará 0, nos informando que o nó 4, o escravo, está com a produção de heartbeat desabilitada. 
+```
+Este comando é um comando SDO. Em seguida podemos testar comandos de controle de rede 
+
+```
+~$ cocomm "4 reset communication"
+~$ cocomm "0 reset node"
+```
+
+Os nós são iniciados em um estado de não-volatilidade, gerando mensagens de emergência e desabilitando a função PDO.É necessário então realizar a configuração dos nós através dos comandos abaixo:
+```
+cocomm "1 w 0x1011 1 vs load"
+cocomm "4 w 0x1011 1 vs load"
+#carregando configurações pré definidas nos object dictionaries
+
+#se necessário, alterações nas configuraçoes podem ser feitas utilizando diretamente o terminal
+cocomm "1 write 0x1017 0 u16 1000"
+cocomm "4 write 0x1017 0 u16 1000"
+#alterações da função de heartbeat de cada nó
+
+cocomm "1 w 0x1010 1 vs save"
+cocomm "4 w 0x1010 1 vs save"
+#guardando alterações 
+
+```
+Note que mudanças de parâmetros PDO so podem ser executadas com a função PDO desabilitada
+
+É possível tambem criar um arquivo com intruções pré programadas e utiliza-lo como fonte de comandos:
+```
+~$ touch comandos.txt
+~$printf ” [1] r 0x1017 0 u16 ;[2] 1 start” >> comandos.txt
+```
+Em seguida utilizar a função de leitura da própria ferramenta:
+```
+~$ cocomm -f comandos.txt
+```
 Para o nosso projeto os Index e SubIndex a serem utilizados deverão seguir os padrões da Maxxon, conforme segue:
 
 ![image](https://user-images.githubusercontent.com/78976475/131531150-df3fa1d4-0bf9-47b5-9189-49a8015e2d05.png)
 
-Dessa forma, para criar um nó para a rede CAN é necessário utilizar o OD, isso aumenta a liberdade para as capacidades dos nós. Depois disso, é preciso alterar os valores dos parâmetros de comunicação PDO e os de mapeamento PDO.  Os valores são 1400(4) e 1800(4) seguido de 1600(4) e 1A00(4) respectivamente. 
+Ao criar uma rede CAN, as configurações dos nós como timer de eventos, COB-ID, tipo de transmissão, sub-índices e outros parâmetros são retirados do Object dictionary, que neste projeto se encontra em CANopenNode/example. Ele pode ser alterado usando o editor presente no CANopen Node ou utilizando o próprio terminal como descrito acima. Para alterar estes valores utiliza-se os índices 1400 e 1800 para comunicação RPDO e TPDO respectivamente, e índices 1600 e 1A00 para mapeamento RPDO e TPDO respectivamente.O mapeamento dependerá de cada a aplicação
+
 Para maiores informações acesse o link sobre aplicação de CANopen no EPOS2, que se encontra no final deste readme
 
 <hr>
 # Arquivo do projeto final:
 
-A ideia dos códigos do projeto final é fazer com que programa inicialize os nós, depois inicialize as trheads de comunicação e chamada de função, segurar a comunicação e depois encerrar os scripts dos nós.
-Os códigos contidos, portanto no projeto final são combinações de funções prontas sem a alteração de parâmetros para o caso do nosso projeto.
+A ideia dos códigos do projeto final é fazer com que programa inicialize os nós, depois inicialize as threads de comunicação e chamada de função, segurar a comunicação e depois encerrar os scripts dos nós.
+Os códigos contidos, portanto no projeto final são combinações de funções prontas sem integração com o projeto, possívelmente servindo como bibliotecas para futuras alterações e implementaçoes
 Os trechos dos códigos de de erro e conversão de ddp, constidos em motor.c, encoder.c e projetofinal.c são de autoria de outro grupo. O link do projeto do gripo está no final do readme.
-No final das contas não foi possível rodar os códigos, portanto não é possível saber se os mesmos estão funcionando corretamente para uma aplicação prática do módulo.
+O próximo passo do projeto seria utilizar o arquivo bufsize para ler o log criado pelo script candumplog e extrair as informações transmitidas entre mestre e escravo para processá-las e poder mais tarde enviar comandos atraves do cocomm para alterar o comportamento do motor. O arquivo nomeado motor contem código para o estabelecimento de threads na rede, passo importante a ser feito antes de embarcar o sistema
+No final das contas não foi possível executar com sucesso todas os recursos encontrados, portanto não é possível saber se os mesmos estão funcionando corretamente para uma aplicação prática do módulo.
 
 # Referências e outros links:
 
