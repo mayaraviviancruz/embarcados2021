@@ -1,3 +1,6 @@
+//PROTOCOLO PADRÃO DA TORADEX PARA CONFIGURAÇÃO DE PORTAS PARA ENVIO DE INFORMAÇÕES A SER UTILIZADO NOS ARQUIVOS progfinal.c, motor.c e encoder.c
+
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <fcntl.h>
