@@ -315,9 +315,13 @@ Para maiores informações acesse o link sobre a aplicação de CANopen no EPOS2
 # Arquivo do projeto final:
 
 A ideia dos códigos do projeto final é fazer com que programa inicialize os nós, depois inicialize as threads de comunicação e chamada de função, segurar a comunicação e depois encerrar os scripts dos nós.
+
 Os códigos contidos no projeto final são combinações de funções prontas sem integração com o projeto, possívelmente servindo como bibliotecas para futuras alterações e implementaçoes.
+
 Os trechos dos códigos de de erro e conversão de ddp, contidos em motor.c, encoder.c e projetofinal.c são de autoria de outro grupo. O link do projeto do grupo está no final do Readme.
+
 O próximo passo do projeto seria utilizar o arquivo bufsize para ler o log criado pelo script candumplog e extrair as informações transmitidas entre mestre e escravo para processá-las e poder mais tarde enviar comandos atraves do cocomm para alterar o comportamento do motor. O arquivo nomeado motor contém o código para o estabelecimento de threads na rede, passo importante a ser feito antes de embarcar o sistema.
+
 No final das contas não foi possível executar com sucesso todas os recursos encontrados, portanto não é possível saber se os mesmos estão funcionando corretamente para uma aplicação prática do módulo.
 
 # Referências e outros links:
