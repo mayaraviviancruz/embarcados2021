@@ -1,3 +1,6 @@
+//PROTOCOLO PADRÃO DE CRIAÇÃO E ENCERRAMENTO DE THREADS, A SER UTILIZADO NOS ARQUIVOS DE  projetofinal.c, motor.c e encoder.c
+
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <pthread.h>
