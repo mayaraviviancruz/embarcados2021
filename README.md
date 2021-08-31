@@ -312,7 +312,6 @@ Ao criar uma rede CAN, as configurações dos nós como timer de eventos, COB-ID
 
 Para maiores informações acesse o link sobre a aplicação de CANopen no EPOS2, que se encontra no final deste Readme.
 
-<hr>
 # Arquivo do projeto final:
 
 A ideia dos códigos do projeto final é fazer com que programa inicialize os nós, depois inicialize as threads de comunicação e chamada de função, segurar a comunicação e depois encerrar os scripts dos nós.
