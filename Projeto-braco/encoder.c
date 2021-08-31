@@ -1,18 +1,18 @@
-//Bibliotecas tradicionais de C
+//Bibliotecas basicas de C
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-//Bibliotecas para o uso das threads, mutex getsockname
+//Bibliotecas de threads, mutex getsockname
 #include <pthread.h>
 #include <semaphore.h>
 
-//Outras bibliotecas de funções
+//Bibliotecas de funções diversas
 #include <unistd.h>
 #include <math.h>
 #include <fcntl.h>
 
-//Bibliotecas para redes
+//Bibliotecas de Redes
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -20,15 +20,15 @@
 #include <netdb.h>
 
 
-//Variáveis globais
+/////////////////////////////////////////////////VARIÁVEIS GLOBAIS/////////////////////////////////////
 
 pthread_t id1, id2, id3;
 float posicaoFinal, ddp, erro;
 float coef, correcao;
 
-//Funções aserem utilizadas
+/////////////////////////////////////////////////FUNÇÕES///////////////////////////////////////////////
 
-//Thread 1:
+//FUNÇÃO DA PRIMEIRA THREAD
 void * minha_thread_1 (void *apelido) {
 	float k;
 	while (1) {
@@ -39,7 +39,7 @@ void * minha_thread_1 (void *apelido) {
 	pthread_exit(NULL);
 }
 
-//Thread 2:
+//FUNÇÃO DA SEGUNDA THREAD
 void * minha_thread_2(void *apelido) {
 	sleep(1);
 	while (1) {
@@ -49,7 +49,7 @@ void * minha_thread_2(void *apelido) {
 	pthread_exit(NULL);
 }
 
-//Thread 3:
+//FUNÇÃO DA TERCEIRA THREAD
 void * minha_thread_3(void *apelido) {
 	sleep(1);
 	while (1) {
@@ -59,16 +59,16 @@ void * minha_thread_3(void *apelido) {
 	pthread_exit(NULL);
 }
 
-//Configuração de portas:
+// AQUI O PROGRAMA CONFIGURA AS PORTAS - FUNÇÕES ORIUNDAS DA TORADEX
 int portConfig(int argc, char *argv[]){
 	int fd;
 
-  // GPIO:
+  // export GPIO
   fd = open("/sys/class/gpio/export", O_WRONLY);
   write(fd, "50", 2);
   close(fd);
 
-  // Configuração das saídas:
+  // Configure as output
   fd = open("/sys/class/gpio/gpio50/direction", O_WRONLY);
   write(fd, "out", 3);
   close(fd);
@@ -84,12 +84,14 @@ int portConfig(int argc, char *argv[]){
   return EXIT_SUCCESS;
 }
 
+// CÁLCULO DE TENSÃO 
+
 int calculoTensao(posicaoFinal, posicaoInicial){
 	erro = math.abs(posicaoFinal - posicaoInicial);
 	ddp = erro*coef + correcao;
 }
 
-//Definição da main (função principal)
+///FUNÇÃO PRINCIPAL DE CRIAÇÃO DE NÓS - É UMA FUNÇÃO DO PROGRAMA THREADS.C
 
 int main(int argc, char *argv[]) {
 

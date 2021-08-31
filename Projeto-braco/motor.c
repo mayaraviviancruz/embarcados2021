@@ -1,20 +1,18 @@
-//Inclusões de bibliotecas
-
-//Funçoes básicas
+//Bibliotecas basicas de C
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-//Sockets, threads e mutex
+//Bibliotecas de threads, mutex getsockname
 #include <pthread.h>
 #include <semaphore.h>
 
-//Funçoes gerais
+//Bibliotecas de funções diversas
 #include <unistd.h>
 #include <math.h>
 #include <fcntl.h>
 
-//Redes
+//Bibliotecas de Redes
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -22,18 +20,16 @@
 #include <netdb.h>
 
 
-/*Variáveis*/
+/////////////////////////////////////////////////VARIÁVEIS GLOBAIS/////////////////////////////////////
 
 pthread_t id1, id2, id3;
 double posicaoFinal, ddp, erro;
 double coef, correcao;
 
-/*Declarações de Funções*/
+/////////////////////////////////////////////////FUNÇÕES///////////////////////////////////////////////
 
-/*Threads*/
-
-//1
-void * thread_1 (void *apelido) {
+//FUNÇÃO DA PRIMEIRA THREAD
+void * minha_thread_1 (void *apelido) {
 	float k;
 	while (1) {
 		k = sin(k+ (3.14/2));
@@ -43,8 +39,8 @@ void * thread_1 (void *apelido) {
 	pthread_exit(NULL);
 }
 
-//2
-void * thread_2(void *apelido) {
+//FUNÇÃO DA SEGUNDA THREAD
+void * minha_thread_2(void *apelido) {
 	sleep(1);
 	while (1) {
 		printf(" 2\n");
@@ -53,8 +49,8 @@ void * thread_2(void *apelido) {
 	pthread_exit(NULL);
 }
 
-//3
-void * thread_3(void *apelido) {
+//FUNÇÃO DA TERCEIRA THREAD
+void * minha_thread_3(void *apelido) {
 	sleep(1);
 	while (1) {
 		printf(" 3\n");
@@ -63,36 +59,45 @@ void * thread_3(void *apelido) {
 	pthread_exit(NULL);
 }
 
-//Configuração das portas LED
+//FUNÇÃO DE CONFIGURAÇÃO DAS PORTAS ORIUNDAS DA TORADEX
 int portConfig(int argc, char *argv[]){
 	int fd;
 
-  // Escrita de GPIO
+  // export GPIO
   fd = open("/sys/class/gpio/export", O_WRONLY);
   write(fd, "50", 2);
   close(fd);
 
-  // Configuração
+  // Configure as output
   fd = open("/sys/class/gpio/gpio50/direction", O_WRONLY);
   write(fd, "out", 3);
   close(fd);
 
-
+  // Blink GPIO once
+/*
+  fd = open("/sys/class/gpio/gpio50/value", O_WRONLY | O_SYNC);
+  write(fd, "0", 1);
+  usleep(1000000);
+  write(fd, "1", 1);
+  close(fd);
+*/
   return EXIT_SUCCESS;
 }
+
+// CÁLCULO DA TENSÃO
 
 int calculoTensao(posicaoFinal, posicaoInicial){
 	erro = math.abs(posicaoFinal - posicaoInicial);
 	ddp = erro*coef + correcao;
 }
 
-/*MAIN*/
+//FUNÇÃO DE CRIAÇÃO DAS THREADS - ORIUNDA DA TORADEX
 
 int main(int argc, char *argv[]) {
 
-	pthread_create (&id1, NULL , (void *) thread_1, NULL);
+	pthread_create (&id1, NULL , (void *) minha_thread_1, NULL);
 
-	pthread_create (&id2, NULL , (void *) thread_2, NULL);
+	pthread_create (&id2, NULL , (void *) minha_thread_2, NULL);
 
 	pthread_create (&id3, NULL , (void *) calculoTensao, NULL);
 
@@ -100,7 +105,7 @@ int main(int argc, char *argv[]) {
 	return 0;
 }
 
-
+/////////////controle de posição do motor
 int saidaProMotor(posicaoAtual, portaComunicacao, portaSaida, ....){
 	s = posicao;
 	ptc = porta;
@@ -134,22 +139,24 @@ Atuador
 Interface
 
 
-thread 1 ( sensor->controlador)
-	Entrada constante de dados do sensor
-	Transformação de dados decimal<->numerico
-	Processamento dos dados
-	Envio de posicao
+thread 1 (comunicacao sensor-controlador)
+	coletar dados/valores do sensor (constantemente)
+	transformar os dados obtidos (numero/decimal)
+	compreender o significado do sinal (posicao absoluta x relativa)
+	enviar posicao para o controlador
 
-	Modelagem do controlador
-	Encontrar o valor do erro do sistema
-	Calcular a tensao a ser enviada baseada no erro 
+	matematica/modelagem do controlador
+	calcular o controle (|posicao no tempo 1 - posicao desejada| = erro)
+	baseado no erro, fazer o calculo de proporcionalidade para a tensao a ser enviada pro motor
 
-thread 2 (controlador->atuador)
-	Entrada de dados do controlador
-	Processamento e transformacao dos dados 
-	Envio do sinal 
+thread 2 (comunicacao controlador-atuador)
+	coletar dados/valores do controlador
+	transformar os dados obtidos
+	compreender o significado do dado
+	enviar o valor de saida para o atuador/motor
 	
-	No calculo do valor de saida ocorre atualizacao do sensor,gerando um feedback 
+	tal que, quando calculado o valor de saida, o valor do sensor atualiza, refazendo o calculo e mandando-o de volta
 
 protocolo de comunicao em cam, a especificar as portas dos arquivos etc
-Se o motor tiver ponte H so e necessario enviar a tensao,mas se houver um controlador e necesario um txt para determinar a tarefa
+enviando: caso o motor tenha apenas uma ponte H, mandar tensao (e a ponte H faz o calculo proprio, mexendo o motor); caso haja um microcontrolador, enviar um .txt (ditando o que deve ser feito)
+

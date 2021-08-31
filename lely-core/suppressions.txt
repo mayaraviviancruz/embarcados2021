@@ -1,0 +1,6 @@
+*:/usr/*
+*:include/lely/co/def/*
+shadowArgument
+shadowVariable
+unreadVariable
+missingIncludeSystem
