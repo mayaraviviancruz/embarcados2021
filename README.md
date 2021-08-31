@@ -253,7 +253,7 @@ No final das contas não foi possível rodar os códigos, portanto não é poss�
 
 >Onde vimos como usar o CAN no Colibri:
 >https://developer.toradex.com/knowledge-base/can-controller-area-network-on-colibri-module#CAN_on_Colibri_VFxx
->
+
 >Notas de aplicação do CANopen no EPOS2 da Maxxon:
 >https://www.maxongroup.com/medias/sys_master/root/8834322759710/EPOS2-Application-Notes-Collection-En.pdf
 
