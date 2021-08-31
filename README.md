@@ -2,6 +2,21 @@
 
 <hr>
 
+# Configurações iniciais:
+
+Para iniciar o projeto é necessário baixar e configurar o u-boot e o kernel linux.
+Na primeira etapa configuramos a toolchain.
+Para baixar instalar siga os seguintes comandos em seu terminal:
+
+```sh
+$ cd ~
+$ wget -O gcc-linaro-7.3.1-2018.05-x86_64_arm-linux-gnueabihf.tar.xz "https://releases.linaro.org/components/toolchain/binaries/7.3-2018.05/arm-linux-gnueabihf/gcc-linaro-7.3.1-2018.05-x86_64_arm-linux-gnueabihf.tar.xz"
+$ tar xvf gcc-linaro-7.3.1-2018.05-x86_64_arm-linux-gnueabihf.tar.xz
+$ ln -s gcc-linaro-7.3.1-2018.05-x86_64_arm-linux-gnueabihf gcc-linaro
+
+```sh
+
+
 
 # Conexão:
 
