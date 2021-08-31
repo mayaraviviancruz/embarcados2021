@@ -72,14 +72,14 @@ $ cd ~/workdir/linux-toradex
 $ make colibri_vf_defconfig
 ```
 Sendo a configuração esclusiva para a nossa placa, assim como no u-boot
-Para compilar o kernel utilizamos os seguintes comandos:
+Em seguida utilizamos os seguintes comandos:
 
 ```sh
 $ make -j$(nproc) zImage | tee build.log
 $ make vf500-colibri-eval-v3.dtb
 $ make -j$(nproc) modules
 ```
-A partir de agora, sempre que for necessário recompilar o kernel será necessário atualizar os módulos também.
+
 
 # Habilitação do CAN 
 
@@ -92,11 +92,91 @@ $ nano vf-colibri-eval-v3.dtsi
 ```
 Esses passos servem para abrirmos o código em um editor de texto no terminal do linux, dessa maneira poderemos efetuar as alterações necessárias para a habilitação da can0.
 Nesse caso, é necessário adicionar o nó do can0 com um status de okay no código, além de alterar o status do i2c0 para desabilitado.
-Segue uma imagem com esse trecho do código para uma melhor visualização:
+Segue uma imagem com esse trecho do código, para que seja possível ver como deverá ficar o código:
 
 ![image](https://user-images.githubusercontent.com/78976475/131508689-35d5a711-0ddf-470f-be49-b28c01fc1960.png)
 
+Em seguida, basta fazer a configuração e compilação como segue:
 
+```sh
+$ cd linux-toradex
+$ make colibri_vf_defconfig
+$ make vf500-colibri-eval-v3.dtb
+```
+Agora, basta trocar a dtb no módulo para que que a CAN possa ser acessível no módulo.
+
+# Testando o CAN
+
+Para a comunicação CAN é necessária a instalação do CANopen, sendo necessário rodar em pelo menos 4 terminais diferentes. cada terminal com uma função. O terminal 1 para a função de comuniação, o terminal 2 para a criação do nó master, o terminal 3 para o nó servo e o terminal 4 para a transferência de comandos via cocomm.
+
+Primeiro, testamos a CAN.
+Para testar a CAN é necessário primeiro a instalação dos pacotes binários, de desenvolvimento e ferramentas do CANopen.
+
+Para a instalação dos pacotes binários no Linux, basta usar as linhas de comando que seguem:
+
+```sh
+$ sudo add-apt-repository ppa:lely/ppa
+$ sudo apt-get update
+```
+```sh
+$ sudo apt-get install liblely-coapp-dev liblely-co-tools python3-dcf-tools
+```
+```sh
+$ pkg-config --cflags liblely-coapp
+$ pkg-config --libs liblely-coapp
+```
+```sh
+$ sudo apt-get install can-utils
+```
+Por fim, instalaremos outras ferramentas adicionais que foram sugeridas no tutorial da Lely CANopen (link no final do readme):
+
+```sh
+$ sudo apt-get install \
+    git build-essential automake libtool \
+    python3-setuptools python3-wheel \
+    python3-empy python3-yaml \
+    libbluetooth-dev \
+    valgrind \
+    doxygen graphviz
+    
+```
+ 
+ Essas últimas ferramentas irão demorar um pouco para baixar. 
+ Em seguida poderemos clonar o repositório do git da Lely, conforme segue:
+ 
+ ```sh
+$ git clone https://gitlab.com/lely_industries/lely-core.git
+$ cd lely-core
+$ autoreconf -i
+$ mkdir -p build
+$ cd build
+$ ../configure --disable-cython
+$ make
+$ make check
+```
+
+Nessa etapa criamos o script de configuração para depois buildar. 
+
+Agora, com as ferramentas em mãos, vamos fazer os testes a partir da ferramenta CANopen control. E então criaremos o master e o slave para a comunicação do CAN bus virtual.
+
+```sh
+$ sudo modprobe vcan
+$ sudo ip link add dev vcan0 type vcan
+$ sudo ip link set up vcan0
+$ ip link show vcan0
+```
+Aqui acabamos de criar uma interface de rede CAN e checamos ela.
+Agora para monitorar as informações utilizamos o seguinte comando em um terminal que ficará aberto:
+
+```sh
+$ candump vcan0
+```
+
+Em um novo terminal iremos criar um dispositivo virtual CANopen com o seguinte comando:
+
+```sh
+$ coctl vcan0 /etc/coctl.dcf
+```
 
 # Conexão:
 
@@ -106,12 +186,7 @@ Por meio do Script config.sh teremos o CAN Bus virtual e poderemos inicializar o
 # Configuração pata a habilitação das conexões:
 Para efetuar a conexão basta realizar o download da toolchain , assim será possível compilar no formato do colibri. Em seguida é necessário baixar e editar os arquivos a serem compilados e definir o Kernel.
 
-# Testando o CAN
 
-Para a comunicação CAN é necessária a instalação do CANopen, sendo necessário rodar em pelo menos 4 terminais diferentes. cada terminal com uma função. O terminal 1 para a função de comuniação, o trminal 2 para a criação do nó master, o terminal 3 para o nó servo e o terminal 4 para a transferência de comandos via cocomm. Para instalar basta acessar o lin a seguir:
-
-
-https://opensource.lely.com/canopen/docs/installation/
 
 <hr>
 
