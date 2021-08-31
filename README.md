@@ -5,7 +5,7 @@
 # Configurações iniciais:
 
 Para iniciar o projeto é necessário baixar e configurar o u-boot e o kernel linux.
-Na primeira etapa configuramos a toolchain.
+Na primeira etapa configuramos a toolchain. Pois assim será possívem fazer o cross-compile para buildar o u-boot ou linux
 Para baixar instalar siga os seguintes comandos em seu terminal:
 
 ```sh
@@ -13,8 +13,88 @@ $ cd ~
 $ wget -O gcc-linaro-7.3.1-2018.05-x86_64_arm-linux-gnueabihf.tar.xz "https://releases.linaro.org/components/toolchain/binaries/7.3-2018.05/arm-linux-gnueabihf/gcc-linaro-7.3.1-2018.05-x86_64_arm-linux-gnueabihf.tar.xz"
 $ tar xvf gcc-linaro-7.3.1-2018.05-x86_64_arm-linux-gnueabihf.tar.xz
 $ ln -s gcc-linaro-7.3.1-2018.05-x86_64_arm-linux-gnueabihf gcc-linaro
+```
+Após isso será possível ver a pasta da toolchain em seu computador. 
+Em seguida é necessário exportar as variáveis que irão executar os comandos e configurações necessárias. 
+Use os comandos a seguir am seu terminal:
 
 ```sh
+$ export ARCH=arm
+$ export PATH=~/gcc-linaro/bin/:$PATH
+$ export CROSS_COMPILE=arm-linux-gnueabihf-
+```
+```sh
+$ echo "export ARCH=arm" >> ~/export_compiler
+$ echo "export PATH=~/gcc-linaro/bin/:$PATH" >> ~/export_compiler
+$ echo "export CROSS_COMPILE=arm-linux-gnueabihf-" >> ~/export_compiler
+$ source ~/export_compiler
+```
+Além disso, antes de iniciar as configutações precisamos baixar e instalar as ferramenteas o u-boot, para fazer isso, siga os seguintes passos no seu terminal.
+
+```sh
+$ sudo apt-get install u-boot-tools
+$ sudo apt-get install bc build-essential git libncurses5-dev lzop perl libssl-dev
+```
+Agora iniciamos com o u-boot. Criamos uma pasta para ele chamada workdir e fizemos o git clone do repositório como segue:
+
+```sh
+$ mkdir -p ~/workdir
+$ cd ~/workdir
+$ git clone -b 2016.11-toradex git://git.toradex.com/u-boot-toradex.git
+```
+Observe que o branch utilizado é o 2016.11-toradex, pois é a branch para a nossa placa VF50
+Em seguida executamos a configuração:
+
+```sh
+$ cd ~/workdir/u-boot-toradex
+$ make colibri_vf_defconfig
+```
+Observe que a configuração colibri_vf_defconfig específica para a nossa placa, para miores informações é possível acessar o tutorial da toradex com mais detalhes. O link está no final do Readme.
+Agora compilamos o boot loader:
+
+```sh
+$ make -j$(nproc) 2>&1 | tee build.log
+$ ls u-boot.bin
+```
+Agora nós vamos configurar o Linux Kernel.
+Primeiro, é necessário criar um diretório e fazer o git clone:
+
+```sh
+$ mkdir -p ~/workdir
+$ cd ~/workdir
+$ git clone -b 	toradex_vf_4.4 git://git.toradex.com/linux-toradex.git
+```
+Atenção para a branch toradex_vf_4.4 que precisa ser esta especificamente para a nossa placa.
+Para configurar o Kernel executamos:
+
+```sh
+$ cd ~/workdir/linux-toradex
+$ make colibri_vf_defconfig
+```
+Sendo a configuração esclusiva para a nossa placa, assim como no u-boot
+Para compilar o kernel utilizamos os seguintes comandos:
+
+```sh
+$ make -j$(nproc) zImage | tee build.log
+$ make vf500-colibri-eval-v3.dtb
+$ make -j$(nproc) modules
+```
+A partir de agora, sempre que for necessário recompilar o kernel será necessário atualizar os módulos também.
+
+# Habilitação do CAN 
+
+No caso do nosso projeto decidimos habilitar a can0
+Para a devida habilitação da mesma é necessário seguir os seguintes passos no seu terminal:
+
+```sh
+$ cd linux-toradex/arch/arm/boot/dts
+$ nano vf-colibri-eval-v3.dtsi
+```
+Esses passos servem para abrirmos o código em um editor de texto no terminal do linux, dessa maneira poderemos efetuar as alterações necessárias para a habilitação da can0.
+Nesse caso, é necessário adicionar o nó do can0 com um status de okay no código, além de alterar o status do i2c0 para desabilitado.
+Segue uma imagem com esse trecho do código para uma melhor visualização:
+
+![image](https://user-images.githubusercontent.com/78976475/131508689-35d5a711-0ddf-470f-be49-b28c01fc1960.png)
 
 
 
