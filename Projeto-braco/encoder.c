@@ -26,7 +26,7 @@ pthread_t id1, id2, id3;
 float posicaoFinal, ddp, erro;
 float coef, correcao;
 
-//FUNÇÕES QUE SÃO TRECHOS DAS FUNÇÕES PADRÕES DE THREAD QUE SE ENCONTRAM NO ARQUIVO thread.c
+//FUNÇÕES QUE SÃO TRECHOS DAS FUNÇÕES PADRÕES DE THREAD QUE SE ENCONTRAM NO ARQUIVO threads.c
 
 //FUNÇÃO DA PRIMEIRA THREAD
 void * minha_thread_1 (void *apelido) {
