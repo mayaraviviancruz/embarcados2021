@@ -26,7 +26,7 @@ pthread_t id1, id2, id3;
 double posicaoFinal, ddp, erro;
 double coef, correcao;
 
-/////////////////////////////////////////////////FUNÇÕES///////////////////////////////////////////////
+//FUNÇÕES PADRÕES PARA AS THREADS ORIUNDAS DO ARQUIVO threads.c
 
 //FUNÇÃO DA PRIMEIRA THREAD
 void * minha_thread_1 (void *apelido) {
@@ -59,7 +59,8 @@ void * minha_thread_3(void *apelido) {
 	pthread_exit(NULL);
 }
 
-//FUNÇÃO DE CONFIGURAÇÃO DAS PORTAS ORIUNDAS DA TORADEX
+//FUNÇÃO DE CONFIGURAÇÃO DAS PORTAS GPIO ORIUNDAS DO SITE DA TORADEX
+
 int portConfig(int argc, char *argv[]){
 	int fd;
 
@@ -84,14 +85,14 @@ int portConfig(int argc, char *argv[]){
   return EXIT_SUCCESS;
 }
 
-// CÁLCULO DA TENSÃO
+// CÁLCULO DA TENSÃO OBTIDO POR MEIO DE COLABORAÇÃO DE OUTRO GRUPO, LINK NO FINAL DO Readme.
 
 int calculoTensao(posicaoFinal, posicaoInicial){
 	erro = math.abs(posicaoFinal - posicaoInicial);
 	ddp = erro*coef + correcao;
 }
 
-//FUNÇÃO DE CRIAÇÃO DAS THREADS - ORIUNDA DA TORADEX
+//FUNÇÃO DE CRIAÇÃO DAS THREADS - ORIUNDA DA FUNÇÃO PADRÃO CONTIDA EM threads.c
 
 int main(int argc, char *argv[]) {
 
@@ -105,7 +106,8 @@ int main(int argc, char *argv[]) {
 	return 0;
 }
 
-/////////////controle de posição do motor
+/////////////controle de posição do motor obtida por meio de colaboração do grupo mencionado no Readme
+
 int saidaProMotor(posicaoAtual, portaComunicacao, portaSaida, ....){
 	s = posicao;
 	ptc = porta;
