@@ -2,9 +2,6 @@
 
 <hr>
 
-OBS: não foi possível deletar as pastas u-boot-toradex, tcColibri e linux-toradex do repositório, conforme solicitado. Elas estão dando erro ao tentar deletar.
-
-
 # Configurações iniciais:
 
 Para iniciar o projeto é necessário baixar e configurar o u-boot e o kernel linux.
@@ -266,3 +263,4 @@ No final das contas não foi possível rodar os códigos, portanto não é poss�
 https://github.com/KingCoolgate/projetoEmbarcados2021
 
 
+*OBS: não foi possível deletar as pastas u-boot-toradex, tcColibri e linux-toradex do repositório, conforme solicitado. Elas estão dando erro ao tentar deletar.
