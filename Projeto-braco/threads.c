@@ -1,4 +1,4 @@
-//PROTOCOLO PADRÃO DE CRIAÇÃO E ENCERRAMENTO DE THREADS, A SER UTILIZADO NOS ARQUIVOS DE  projetofinal.c, motor.c e encoder.c
+//PROTOCOLO PADRÃO DE CRIAÇÃO E ENCERRAMENTO DE THREADS, A SER UTILIZADO NOS ARQUIVOS DE  progfinal.c, motor.c e encoder.c
 
 
 #include <stdio.h>
