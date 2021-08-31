@@ -24,32 +24,7 @@ https://opensource.lely.com/canopen/docs/installation/
 # Configuração de arquivos do CANopenNode
 
 Para fazer o CANopenNode funcionar é preciso a função cocomm no terminal  como segue abaixo:
-```sh
-~$ cd embarcados2021
-~/embarcados2021/ git init
-~/embarcados2021/ git pull
-~/embarcados2021/ git submodule update --init --recursive
-~/embarcados2021/ cd CANopenDemo/CANopenLinux/cocomm
-~/embarcados2021/CANopenDemo/CANopenLinux/cocomm/ make
-~/embarcados2021/CANopenDemo/CANopenLinux/cocomm/ sudo make install //Adicionando a função cocomm no Terminal
-~/embarcados2021/CANopenDemo/CANopenLinux/ make
-~/embarcados2021/CANopenDemo/CANopenLinux/ sudo make install
-Função canopend: 
-~/embarcados2021/CANopenDemo/CANopenLinux/cocomm/ cd ../demo
-~/embarcados2021/CANopenDemo/demo/ nano Makefile
-# Serão adicionadas as seguintes linhas no final:
-'install:
-	cp $(LINK_TARGET) /usr/bin/$(LINK_TARGET)'
-~/embarcados2021/CANopenDemo/demo/ make
-~/embarcados2021/CANopenDemo/demo/ sudo make install
-Função demoLinuxDevice.
-```
-
-
-
 Para criar um nó para a rede CAN utilize o OD, isso aumenta a liberdade para as capacidades dos nós. Depois disso, altere os valores dos parâmetros de comunicação PDO e os de mapeamento PDO.  valores 1400(4) e 1800(4) seguido de 1600(4) e 1A00(4) respectivamente. 
-
-
 
 <hr>
 
@@ -59,7 +34,7 @@ Para criar um nó para a rede CAN utilize o OD, isso aumenta a liberdade para as
 https://github.com/CANopenNode/CANopenDemo
 
 >Onde vimos como usar o CAN no Colibri:
-https://developer.toradex.com/knowledge-base/can-controller-area-network-on-colibri-module#CAN_on_Colibri_VFxx
+>https://developer.toradex.com/knowledge-base/can-controller-area-network-on-colibri-module#CAN_on_Colibri_VFxx
 
 > Habilitação do CAN na toradex Colibri VFxx <br>
 https://developer.toradex.com/knowledge-base/can-linux#Kernel_Support_Colibri_VFxx
