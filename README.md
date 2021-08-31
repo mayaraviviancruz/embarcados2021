@@ -171,12 +171,35 @@ Agora para monitorar as informações utilizamos o seguinte comando em um termin
 ```sh
 $ candump vcan0
 ```
+![image](https://user-images.githubusercontent.com/78976475/131523754-79163f3b-c023-4481-805d-e3630c5efc7a.png)
 
-Em um novo terminal iremos criar um dispositivo virtual CANopen com o seguinte comando:
+
+Em um novo terminal iremos criar um dispositivo virtual CANopen e inicializar o dispositivo conforme segue:
 
 ```sh
 $ coctl vcan0 /etc/coctl.dcf
 ```
+
+![image](https://user-images.githubusercontent.com/78976475/131524110-b241950d-f031-4395-8dca-40404b172e6a.png)
+
+É possível ver que o terminal que roda o candump já rodas as linhas:
+
+![image](https://user-images.githubusercontent.com/78976475/131524350-736adc6f-5190-49e2-9640-f450bad81cd1.png)
+
+Para adicionar o slave, nó baixamos o arquivo cmd-slave.dcf do seguinte link:
+
+https://opensource.lely.com/canopen/assets/files/cmd-slave.dcf
+
+E então abrimos um novo terminal para o slave que terá o node id 2 conforme segue:
+
+```sh
+$ coctl vcan0 ./cmd-slave.dcf
+```
+![image](https://user-images.githubusercontent.com/78976475/131525086-359ad504-3cb3-44cf-89ba-5c4963ce863b.png)
+
+
+
+
 
 # Conexão:
 
