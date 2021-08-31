@@ -344,4 +344,4 @@ No final das contas não foi possível executar com sucesso todas os recursos en
 > https://github.com/KingCoolgate/projetoEmbarcados2021
 
 
-*OBS: não foi possível deletar as pastas u-boot-toradex, tcColibri e linux-toradex do repositório, conforme solicitado. Elas estão dando erro ao tentar deletar.
+*OBS: não foi possível deletar as pastas u-boot-toradex, tcColibri e linux-toradex do repositório, conforme solicitado, pois elas estão dando erro ao tentar deletar.
