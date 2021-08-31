@@ -265,7 +265,8 @@ Em mais um outro terminal, utilizaremos o programa cocomm para enviar commandos 
 #Neste ponto, este comando retorará 0, nos informando que o nó 4, o escravo, está com a produção de heartbeat desabilitada. 
 ```
 
-![image](https://user-images.githubusercontent.com/62487469/131558351-f8aa2aa8-1c99-48ba-9416-284f307458cb.png)
+![TESTE](https://user-images.githubusercontent.com/62487469/131559778-b1cf89ad-8059-45da-acf3-18a2849a6fc2.png)
+
 
 
 Este comando é um comando SDO. Em seguida podemos testar comandos de controle de rede 
