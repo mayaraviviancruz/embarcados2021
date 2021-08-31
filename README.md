@@ -264,7 +264,8 @@ Em mais um outro terminal, utilizaremos o programa cocomm para enviar commandos 
 ~$ cocomm "4 read 0x1017 0 u16"
 #Neste ponto, este comando retorará 0, nos informando que o nó 4, o escravo, está com a produção de heartbeat desabilitada. 
 ```
-![image](https://user-images.githubusercontent.com/62487469/131557730-8a6a6271-78b4-4592-b603-34785f49adc9.png)
+
+![image](https://user-images.githubusercontent.com/62487469/131558351-f8aa2aa8-1c99-48ba-9416-284f307458cb.png)
 
 
 Este comando é um comando SDO. Em seguida podemos testar comandos de controle de rede 
@@ -313,9 +314,9 @@ Para maiores informações acesse o link sobre aplicação de CANopen no EPOS2, 
 # Arquivo do projeto final:
 
 A ideia dos códigos do projeto final é fazer com que programa inicialize os nós, depois inicialize as threads de comunicação e chamada de função, segurar a comunicação e depois encerrar os scripts dos nós.
-Os códigos contidos, portanto no projeto final são combinações de funções prontas sem integração com o projeto, possívelmente servindo como bibliotecas para futuras alterações e implementaçoes
-Os trechos dos códigos de de erro e conversão de ddp, constidos em motor.c, encoder.c e projetofinal.c são de autoria de outro grupo. O link do projeto do gripo está no final do readme.
-O próximo passo do projeto seria utilizar o arquivo bufsize para ler o log criado pelo script candumplog e extrair as informações transmitidas entre mestre e escravo para processá-las e poder mais tarde enviar comandos atraves do cocomm para alterar o comportamento do motor. O arquivo nomeado motor contem código para o estabelecimento de threads na rede, passo importante a ser feito antes de embarcar o sistema
+    Os códigos contidos, portanto no projeto final são combinações de funções prontas sem integração com o projeto, possívelmente servindo como bibliotecas para futuras alterações e implementaçoes
+    Os trechos dos códigos de de erro e conversão de ddp, constidos em motor.c, encoder.c e projetofinal.c são de autoria de outro grupo. O link do projeto do gripo está no final do readme.
+    O próximo passo do projeto seria utilizar o arquivo bufsize para ler o log criado pelo script candumplog e extrair as informações transmitidas entre mestre e escravo para processá-las e poder mais tarde enviar comandos atraves do cocomm para alterar o comportamento do motor. O arquivo nomeado motor contem código para o estabelecimento de threads na rede, passo importante a ser feito antes de embarcar o sistema
 No final das contas não foi possível executar com sucesso todas os recursos encontrados, portanto não é possível saber se os mesmos estão funcionando corretamente para uma aplicação prática do módulo.
 
 # Referências e outros links:
