@@ -195,11 +195,33 @@ E então abrimos um novo terminal para o slave que terá o node id 2 conforme se
 ```sh
 $ coctl vcan0 ./cmd-slave.dcf
 ```
+
+Veja que o candump retorna uma nova linha:
+
 ![image](https://user-images.githubusercontent.com/78976475/131525086-359ad504-3cb3-44cf-89ba-5c4963ce863b.png)
 
+A partir disso configuramos a produção de batimentos, conforme o tutorial da Ley sugere, que por meio da requisição de SDO, a qual em seguida aparece no candump:
 
+![image](https://user-images.githubusercontent.com/78976475/131526474-1f38cf60-c21e-4fd5-b8cb-1b83c9544be4.png)
 
+Neste caso, no primeiro frame temos a solicitação de download do SDO. O segundo frame é a resposta do slave.
+Para a devida configuração é necessário identificar e e alterar o id do nó. 
+Por meio do LSS é possível fazer isso, conforme mostra a imagem:
 
+![image](https://user-images.githubusercontent.com/78976475/131527779-4f8880a9-185c-47ea-9e81-eaf0e3c82e44.png)
+
+Para que a transmissão do PDO seja sincrona, precisamos escrever o período entre mensagens para o objeto. Para que os PDOs sejam enviados após o SYNC, precisamos ir no terminal do slave e configurar o TPDO. Após isso, o slave poderá criar o primeiro TPDO. Conforme segue na imagem:
+
+![image](https://user-images.githubusercontent.com/78976475/131528622-3783c3ba-211c-41b6-af87-5bd6fc11f2ff.png)
+
+A partir de então o PDO é enviado e para ser recebido é necessário o RPDO, então basta ir no terminal do master e digitar o comando:
+
+```sh
+> [17] set rpdo 1 0x183 sync1 1 0x2007 0 u32
+< [17] OK
+```
+
+Por fim, basta apertar enter para conferir que o mestre está recebendo os PDOs
 
 # Conexão:
 
