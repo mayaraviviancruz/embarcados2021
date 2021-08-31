@@ -1,3 +1,28 @@
+/******************************************************************************
+ *
+ * Copyright(c) 2007 - 2010 Realtek Corporation. All rights reserved.
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of version 2 of the GNU General Public License as
+ * published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along with
+ * this program; if not, write to the Free Software Foundation, Inc.,
+ * 51 Franklin Street, Fifth Floor, Boston, MA 02110, USA
+ *
+ * Modifications for inclusion into the Linux staging tree are
+ * Copyright(c) 2010 Larry Finger. All rights reserved.
+ *
+ * Contact information:
+ * WLAN FAE <wlanfae@realtek.com>
+ * Larry Finger <Larry.Finger@lwfinger.net>
+ *
+ ******************************************************************************/
 #ifndef __WLAN_BSSDEF_H__
 #define __WLAN_BSSDEF_H__
 
@@ -6,11 +31,6 @@
 #define NDIS_802_11_LENGTH_SSID         32
 #define NDIS_802_11_LENGTH_RATES        8
 #define NDIS_802_11_LENGTH_RATES_EX     16
-
-/* Set of 8 data rates*/
-typedef unsigned char   NDIS_802_11_RATES[NDIS_802_11_LENGTH_RATES];
-/* Set of 16 data rates */
-typedef unsigned char   NDIS_802_11_RATES_EX[NDIS_802_11_LENGTH_RATES_EX];
 
 struct ndis_802_11_ssid {
 	u32 SsidLength;
@@ -58,18 +78,7 @@ struct NDIS_802_11_FIXED_IEs {
 	u16 Capabilities;
 };
 
-/*
- * Length is the 4 bytes multiples of the sume of
- * 6 * sizeof (unsigned char) + 2 + sizeof (ndis_802_11_ssid) + sizeof (u32)
- * + sizeof (s32) + sizeof (NDIS_802_11_NETWORK_TYPE)
- * + sizeof (struct NDIS_802_11_CONFIGURATION)
- * + sizeof (NDIS_802_11_RATES_EX) + IELength
-
- * Except the IELength, all other fields are fixed length. Therefore, we can
- * define a macro to present the partial sum.
- */
-
-struct ndis_wlan_bssid_ex {
+struct wlan_bssid_ex {
 	u32 Length;
 	unsigned char  MacAddress[6];
 	u8  Reserved[2];
@@ -79,7 +88,8 @@ struct ndis_wlan_bssid_ex {
 	enum NDIS_802_11_NETWORK_TYPE  NetworkTypeInUse;
 	struct NDIS_802_11_CONFIGURATION  Configuration;
 	enum NDIS_802_11_NETWORK_INFRASTRUCTURE  InfrastructureMode;
-	NDIS_802_11_RATES_EX  SupportedRates;
+	u8 rates[NDIS_802_11_LENGTH_RATES_EX];
+	/* number of content bytes in EIs, which varies */
 	u32 IELength;
 	/*(timestamp, beacon interval, and capability information) */
 	u8 IEs[MAX_IE_SZ];
@@ -188,7 +198,7 @@ struct	wlan_network {
 	unsigned int	last_scanned; /*timestamp for the network */
 	int	aid;		/*will only be valid when a BSS is joined. */
 	int	join_res;
-	struct ndis_wlan_bssid_ex network; /*must be the last item */
+	struct wlan_bssid_ex network; /*must be the last item */
 };
 
 enum VRTL_CARRIER_SENSE {
@@ -218,25 +228,6 @@ enum UAPSD_MAX_SP {
 
 #define NUM_PRE_AUTH_KEY 16
 #define NUM_PMKID_CACHE NUM_PRE_AUTH_KEY
-
-/*
- *	WPA2
- */
-struct wlan_bssid_ex {
-	u32 Length;
-	unsigned char  MacAddress[6];
-	u8  Reserved[2];
-	struct ndis_802_11_ssid  Ssid;
-	u32 Privacy;
-	s32 Rssi;
-	enum NDIS_802_11_NETWORK_TYPE  NetworkTypeInUse;
-	struct NDIS_802_11_CONFIGURATION  Configuration;
-	enum NDIS_802_11_NETWORK_INFRASTRUCTURE  InfrastructureMode;
-	NDIS_802_11_RATES_EX  SupportedRates;
-	u32 IELength;
-	u8  IEs[MAX_IE_SZ];	/* (timestamp, beacon interval, and capability
-				 * information) */
-};
 
 #endif /* #ifndef WLAN_BSSDEF_H_ */
 

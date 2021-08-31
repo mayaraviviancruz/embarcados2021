@@ -6,7 +6,6 @@
  * SPDX-License-Identifier:	GPL-2.0+
  */
 
-#include <asm/errno.h>
 #include <asm/io.h>
 #include <common.h>
 #include <fdt_support.h>
@@ -316,6 +315,7 @@ int fsl_dcu_init(unsigned int xres, unsigned int yres,
 	gd->fb_base = gd->bd->bi_dram[0].start +
 		      gd->bd->bi_dram[0].size - info.screen_size;
 	info.screen_base = (char *)gd->fb_base;
+
 	memset(info.screen_base, 0, info.screen_size);
 
 	reset_total_layers();
@@ -396,7 +396,6 @@ void *video_hw_init(void)
 			fsl_dcu_mode_db = &fsl_dcu_cea_mode_640_480;
 		else
 			fsl_dcu_mode_db = &fsl_dcu_mode_640_480;
-
 		break;
 	case RESOLUTION(800, 480):
 		fsl_dcu_mode_db = &fsl_dcu_mode_800_480;

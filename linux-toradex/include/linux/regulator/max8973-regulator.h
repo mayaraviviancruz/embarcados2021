@@ -38,11 +38,6 @@
 #define MAX8973_CONTROL_PULL_DOWN_ENABLE			0x00000010
 #define MAX8973_CONTROL_FREQ_SHIFT_9PER_ENABLE			0x00000020
 
-#define MAX8973_CONTROL_SLEW_RATE_12_5mV_PER_US			0x00000000
-#define MAX8973_CONTROL_SLEW_RATE_25mV_PER_US			0x00000100
-#define MAX8973_CONTROL_SLEW_RATE_50mV_PER_US			0x00000200
-#define MAX8973_CONTROL_SLEW_RATE_200MV_PER_US			0x00000300
-
 #define MAX8973_CONTROL_CLKADV_TRIP_DISABLED			0x00000000
 #define MAX8973_CONTROL_CLKADV_TRIP_75mV_PER_US			0x00010000
 #define MAX8973_CONTROL_CLKADV_TRIP_150mV_PER_US		0x00020000
@@ -63,6 +58,9 @@
  *		control signal from EN input pin. If it is false then
  *		voltage output will be enabled/disabled through EN bit of
  *		device register.
+ * @enable_gpio: Enable GPIO. If EN pin is controlled through GPIO from host
+ *		then GPIO number can be provided. If no GPIO controlled then
+ *		it should be -1.
  * @dvs_gpio: GPIO for dvs. It should be -1 if this is tied with fixed logic.
  * @dvs_def_state: Default state of dvs. 1 if it is high else 0.
  */
@@ -70,6 +68,7 @@ struct max8973_regulator_platform_data {
 	struct regulator_init_data *reg_init_data;
 	unsigned long control_flags;
 	bool enable_ext_control;
+	int enable_gpio;
 	int dvs_gpio;
 	unsigned dvs_def_state:1;
 };

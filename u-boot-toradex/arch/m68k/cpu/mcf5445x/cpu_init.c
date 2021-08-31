@@ -16,7 +16,6 @@
 #include <asm/rtc.h>
 #include <asm/io.h>
 #include <linux/compiler.h>
-#include <fsl_dspi.h>
 
 #if defined(CONFIG_CMD_NET)
 #include <config.h>
@@ -424,7 +423,7 @@ int fecpin_setclear(struct eth_device *dev, int setclear)
 }
 #endif
 
-#ifdef CONFIG_FSL_DSPI
+#ifdef CONFIG_CF_DSPI
 void cfspi_port_conf(void)
 {
 	gpio_t *gpio = (gpio_t *) MMAP_GPIO;

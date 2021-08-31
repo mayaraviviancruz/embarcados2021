@@ -15,29 +15,30 @@ config SYS_SOC
 config SYS_VENDOR
 	default "toradex"
 
-config TRDX_CFG_BLOCK
+config TDX_CFG_BLOCK
 	default y
 
-config TRDX_HAVE_MMC
+config TDX_HAVE_MMC
 	default y
 
-config TRDX_CFG_BLOCK_DEV
+config TDX_CFG_BLOCK_DEV
 	default "0"
 
-config TRDX_CFG_BLOCK_PART
+config TDX_CFG_BLOCK_PART
 	default "1"
 
-# Toradex Configblock in eMMC, at the end of 1st "boot sector"
-config TRDX_CFG_BLOCK_OFFSET
+# Toradex config block in eMMC, at the end of 1st "boot sector"
+config TDX_CFG_BLOCK_OFFSET
 	default "-512"
 
-menuconfig TRDX_CMD_IMX_MFGR
+config TDX_CMD_IMX_MFGR
 	bool "Enable factory testing commands for Toradex iMX 6 modules"
 	help
 	  This adds the commands
-	    mfgr_fuse: OTP fusing during module production
-	    pf0100_otp_prog- Program the OTP fuses on the PMIC PF0100
-	  If executed on already fused modules they don't change any fuse setting.
+	    pf0100_otp_prog - Program the OTP fuses on the PMIC PF0100
+	  If executed on already fused modules it doesn't change any fuse setting.
 	default y
+
+source "board/toradex/common/Kconfig"
 
 endif

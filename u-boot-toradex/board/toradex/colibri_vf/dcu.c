@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 Toradex AG
+ * Copyright 2016 Toradex AG
  *
  * FSL DCU platform driver
  * SPDX-License-Identifier:	GPL-2.0+

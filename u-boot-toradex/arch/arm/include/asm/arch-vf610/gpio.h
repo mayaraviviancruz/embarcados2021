@@ -9,7 +9,7 @@
 #define __ASM_ARCH_VF610_GPIO_H
 
 #define VYBRID_GPIO_COUNT		32
-#define VF610_GPIO_DIRECTION_IN		0x0
+#define VF610_GPIO_DIRECTION_IN	0x0
 #define VF610_GPIO_DIRECTION_OUT	0x1
 
 /* GPIO registers */
@@ -24,5 +24,6 @@ struct vybrid_gpio_regs {
 struct vybrid_gpio_platdata {
 	unsigned int chip;
 	u32 base;
+	const char *port_name;
 };
 #endif	/* __ASM_ARCH_VF610_GPIO_H */

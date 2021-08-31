@@ -18,19 +18,20 @@
 
 #include <linux/kernel.h>
 #include <linux/module.h>
-#include <linux/init.h>
 #include <linux/blkdev.h>
 #include <linux/gfp.h>
 #include <scsi/scsi_host.h>
 #include <linux/ata.h>
 #include <linux/clk.h>
 #include <linux/libata.h>
+#include <linux/mfd/syscon.h>
+#include <linux/mfd/syscon/atmel-smc.h>
 #include <linux/platform_device.h>
 #include <linux/ata_platform.h>
+#include <linux/platform_data/atmel.h>
+#include <linux/regmap.h>
 
-#include <mach/at91sam9_smc.h>
-#include <mach/board.h>
-#include <mach/gpio.h>
+#include <asm/gpio.h>
 
 #define DRV_NAME		"pata_at91"
 #define DRV_VERSION		"0.3"
@@ -57,6 +58,15 @@ struct smc_range {
 	int min;
 	int max;
 };
+
+struct regmap *smc;
+
+struct at91sam9_smc_generic_fields {
+	struct regmap_field *setup;
+	struct regmap_field *pulse;
+	struct regmap_field *cycle;
+	struct regmap_field *mode;
+} fields;
 
 /**
  * adjust_smc_value - adjust value for one of SMC registers.
@@ -211,7 +221,6 @@ static void set_smc_timing(struct device *dev, struct ata_device *adev,
 	unsigned int cycle;       /* SMC Cycle width in MCK ticks */
 	unsigned int setup;       /* SMC Setup width in MCK ticks */
 	unsigned int pulse;       /* CFIOR and CFIOW pulse width in MCK ticks */
-	unsigned int cs_setup = 0;/* CS4 or CS5 setup width in MCK ticks */
 	unsigned int cs_pulse;    /* CS4 or CS5 pulse width in MCK ticks*/
 	unsigned int tdf_cycles;  /* SMC TDF MCK ticks */
 	unsigned long mck_hz;     /* MCK frequency in Hz */
@@ -244,26 +253,22 @@ static void set_smc_timing(struct device *dev, struct ata_device *adev,
 	}
 
 	dev_dbg(dev, "Use IORDY=%u, TDF Cycles=%u\n", use_iordy, tdf_cycles);
-	info->mode |= AT91_SMC_TDF_(tdf_cycles);
 
-	/* write SMC Setup Register */
-	at91_sys_write(AT91_SMC_SETUP(info->cs),
-			AT91_SMC_NWESETUP_(setup) |
-			AT91_SMC_NRDSETUP_(setup) |
-			AT91_SMC_NCS_WRSETUP_(cs_setup) |
-			AT91_SMC_NCS_RDSETUP_(cs_setup));
-	/* write SMC Pulse Register */
-	at91_sys_write(AT91_SMC_PULSE(info->cs),
-			AT91_SMC_NWEPULSE_(pulse) |
-			AT91_SMC_NRDPULSE_(pulse) |
-			AT91_SMC_NCS_WRPULSE_(cs_pulse) |
-			AT91_SMC_NCS_RDPULSE_(cs_pulse));
-	/* write SMC Cycle Register */
-	at91_sys_write(AT91_SMC_CYCLE(info->cs),
-			AT91_SMC_NWECYCLE_(cycle) |
-			AT91_SMC_NRDCYCLE_(cycle));
-	/* write SMC Mode Register*/
-	at91_sys_write(AT91_SMC_MODE(info->cs), info->mode);
+	regmap_fields_write(fields.setup, info->cs,
+			    AT91SAM9_SMC_NRDSETUP(setup) |
+			    AT91SAM9_SMC_NWESETUP(setup) |
+			    AT91SAM9_SMC_NCS_NRDSETUP(0) |
+			    AT91SAM9_SMC_NCS_WRSETUP(0));
+	regmap_fields_write(fields.pulse, info->cs,
+			    AT91SAM9_SMC_NRDPULSE(pulse) |
+			    AT91SAM9_SMC_NWEPULSE(pulse) |
+			    AT91SAM9_SMC_NCS_NRDPULSE(cs_pulse) |
+			    AT91SAM9_SMC_NCS_WRPULSE(cs_pulse));
+	regmap_fields_write(fields.cycle, info->cs,
+			    AT91SAM9_SMC_NRDCYCLE(cycle) |
+			    AT91SAM9_SMC_NWECYCLE(cycle));
+	regmap_fields_write(fields.mode, info->cs, info->mode |
+			    AT91_SMC_TDF_(tdf_cycles));
 }
 
 static void pata_at91_set_piomode(struct ata_port *ap, struct ata_device *adev)
@@ -287,21 +292,21 @@ static unsigned int pata_at91_data_xfer_noirq(struct ata_device *dev,
 {
 	struct at91_ide_info *info = dev->link->ap->host->private_data;
 	unsigned int consumed;
-	unsigned long flags;
 	unsigned int mode;
+	unsigned long flags;
 
 	local_irq_save(flags);
-	mode = at91_sys_read(AT91_SMC_MODE(info->cs));
+	regmap_fields_read(fields.mode, info->cs, &mode);
 
 	/* set 16bit mode before writing data */
-	at91_sys_write(AT91_SMC_MODE(info->cs),
-			(mode & ~AT91_SMC_DBW) | AT91_SMC_DBW_16);
+	regmap_fields_write(fields.mode, info->cs, (mode & ~AT91_SMC_DBW) |
+			    AT91_SMC_DBW_16);
 
 	consumed = ata_sff_data_xfer(dev, buf, buflen, rw);
 
 	/* restore 8bit mode after data is written */
-	at91_sys_write(AT91_SMC_MODE(info->cs),
-			(mode & ~AT91_SMC_DBW) | AT91_SMC_DBW_8);
+	regmap_fields_write(fields.mode, info->cs, (mode & ~AT91_SMC_DBW) |
+			    AT91_SMC_DBW_8);
 
 	local_irq_restore(flags);
 	return consumed;
@@ -319,9 +324,39 @@ static struct ata_port_operations pata_at91_port_ops = {
 	.cable_detect	= ata_cable_40wire,
 };
 
-static int __devinit pata_at91_probe(struct platform_device *pdev)
+static int at91sam9_smc_fields_init(struct device *dev)
 {
-	struct at91_cf_data *board = pdev->dev.platform_data;
+	struct reg_field field = REG_FIELD(0, 0, 31);
+
+	field.id_size = 8;
+	field.id_offset = AT91SAM9_SMC_GENERIC_BLK_SZ;
+
+	field.reg = AT91SAM9_SMC_SETUP(AT91SAM9_SMC_GENERIC);
+	fields.setup = devm_regmap_field_alloc(dev, smc, field);
+	if (IS_ERR(fields.setup))
+		return PTR_ERR(fields.setup);
+
+	field.reg = AT91SAM9_SMC_PULSE(AT91SAM9_SMC_GENERIC);
+	fields.pulse = devm_regmap_field_alloc(dev, smc, field);
+	if (IS_ERR(fields.pulse))
+		return PTR_ERR(fields.pulse);
+
+	field.reg = AT91SAM9_SMC_CYCLE(AT91SAM9_SMC_GENERIC);
+	fields.cycle = devm_regmap_field_alloc(dev, smc, field);
+	if (IS_ERR(fields.cycle))
+		return PTR_ERR(fields.cycle);
+
+	field.reg = AT91SAM9_SMC_MODE(AT91SAM9_SMC_GENERIC);
+	fields.mode = devm_regmap_field_alloc(dev, smc, field);
+	if (IS_ERR(fields.mode))
+		return PTR_ERR(fields.mode);
+
+	return 0;
+}
+
+static int pata_at91_probe(struct platform_device *pdev)
+{
+	struct at91_cf_data *board = dev_get_platdata(&pdev->dev);
 	struct device *dev = &pdev->dev;
 	struct at91_ide_info *info;
 	struct resource *mem_res;
@@ -348,6 +383,14 @@ static int __devinit pata_at91_probe(struct platform_device *pdev)
 
 	irq = board->irq_pin;
 
+	smc = syscon_regmap_lookup_by_phandle(pdev->dev.of_node, "atmel,smc");
+	if (IS_ERR(smc))
+		return PTR_ERR(smc);
+
+	ret = at91sam9_smc_fields_init(dev);
+	if (ret < 0)
+		return ret;
+
 	/* init ata host */
 
 	host = ata_host_alloc(dev, 1);
@@ -360,7 +403,7 @@ static int __devinit pata_at91_probe(struct platform_device *pdev)
 	ap->flags |= ATA_FLAG_SLAVE_POSS;
 	ap->pio_mask = ATA_PIO4;
 
-	if (!irq) {
+	if (!gpio_is_valid(irq)) {
 		ap->flags |= ATA_FLAG_PIO_POLLING;
 		ata_port_desc(ap, "no IRQ, using PIO polling");
 	}
@@ -414,18 +457,22 @@ static int __devinit pata_at91_probe(struct platform_device *pdev)
 
 	host->private_data = info;
 
-	return ata_host_activate(host, irq ? gpio_to_irq(irq) : 0,
-			irq ? ata_sff_interrupt : NULL,
-			irq_flags, &pata_at91_sht);
+	ret = ata_host_activate(host, gpio_is_valid(irq) ? gpio_to_irq(irq) : 0,
+				gpio_is_valid(irq) ? ata_sff_interrupt : NULL,
+				irq_flags, &pata_at91_sht);
+	if (ret)
+		goto err_put;
+
+	return 0;
 
 err_put:
 	clk_put(info->mck);
 	return ret;
 }
 
-static int __devexit pata_at91_remove(struct platform_device *pdev)
+static int pata_at91_remove(struct platform_device *pdev)
 {
-	struct ata_host *host = dev_get_drvdata(&pdev->dev);
+	struct ata_host *host = platform_get_drvdata(pdev);
 	struct at91_ide_info *info;
 
 	if (!host)
@@ -444,27 +491,13 @@ static int __devexit pata_at91_remove(struct platform_device *pdev)
 
 static struct platform_driver pata_at91_driver = {
 	.probe		= pata_at91_probe,
-	.remove		= __devexit_p(pata_at91_remove),
+	.remove		= pata_at91_remove,
 	.driver		= {
 		.name		= DRV_NAME,
-		.owner		= THIS_MODULE,
 	},
 };
 
-static int __init pata_at91_init(void)
-{
-	return platform_driver_register(&pata_at91_driver);
-}
-
-static void __exit pata_at91_exit(void)
-{
-	platform_driver_unregister(&pata_at91_driver);
-}
-
-
-module_init(pata_at91_init);
-module_exit(pata_at91_exit);
-
+module_platform_driver(pata_at91_driver);
 
 MODULE_LICENSE("GPL");
 MODULE_DESCRIPTION("Driver for CF in True IDE mode on AT91SAM9260 SoC");

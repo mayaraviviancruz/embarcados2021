@@ -29,7 +29,7 @@
 
 
 #ifdef CONFIG_IP_DCCP_CCID2_DEBUG
-static int ccid2_debug;
+static bool ccid2_debug;
 #define ccid2_pr_debug(format, a...)	DCCP_PR_DEBUG(ccid2_debug, format, ##a)
 #else
 #define ccid2_pr_debug(format, a...)
@@ -85,7 +85,6 @@ static int ccid2_hc_tx_send_packet(struct sock *sk, struct sk_buff *skb)
 
 static void ccid2_change_l_ack_ratio(struct sock *sk, u32 val)
 {
-	struct dccp_sock *dp = dccp_sk(sk);
 	u32 max_ratio = DIV_ROUND_UP(ccid2_hc_tx_sk(sk)->tx_cwnd, 2);
 
 	/*
@@ -98,14 +97,43 @@ static void ccid2_change_l_ack_ratio(struct sock *sk, u32 val)
 		DCCP_WARN("Limiting Ack Ratio (%u) to %u\n", val, max_ratio);
 		val = max_ratio;
 	}
-	if (val > DCCPF_ACK_RATIO_MAX)
-		val = DCCPF_ACK_RATIO_MAX;
+	dccp_feat_signal_nn_change(sk, DCCPF_ACK_RATIO,
+				   min_t(u32, val, DCCPF_ACK_RATIO_MAX));
+}
 
-	if (val == dp->dccps_l_ack_ratio)
-		return;
+static void ccid2_check_l_ack_ratio(struct sock *sk)
+{
+	struct ccid2_hc_tx_sock *hc = ccid2_hc_tx_sk(sk);
 
-	ccid2_pr_debug("changing local ack ratio to %u\n", val);
-	dp->dccps_l_ack_ratio = val;
+	/*
+	 * After a loss, idle period, application limited period, or RTO we
+	 * need to check that the ack ratio is still less than the congestion
+	 * window. Otherwise, we will send an entire congestion window of
+	 * packets and got no response because we haven't sent ack ratio
+	 * packets yet.
+	 * If the ack ratio does need to be reduced, we reduce it to half of
+	 * the congestion window (or 1 if that's zero) instead of to the
+	 * congestion window. This prevents problems if one ack is lost.
+	 */
+	if (dccp_feat_nn_get(sk, DCCPF_ACK_RATIO) > hc->tx_cwnd)
+		ccid2_change_l_ack_ratio(sk, hc->tx_cwnd/2 ? : 1U);
+}
+
+static void ccid2_change_l_seq_window(struct sock *sk, u64 val)
+{
+	dccp_feat_signal_nn_change(sk, DCCPF_SEQUENCE_WINDOW,
+				   clamp_val(val, DCCPF_SEQ_WMIN,
+						  DCCPF_SEQ_WMAX));
+}
+
+static void dccp_tasklet_schedule(struct sock *sk)
+{
+	struct tasklet_struct *t = &dccp_sk(sk)->dccps_xmitlet;
+
+	if (!test_and_set_bit(TASKLET_STATE_SCHED, &t->state)) {
+		sock_hold(sk);
+		__tasklet_schedule(t);
+	}
 }
 
 static void ccid2_hc_tx_rto_expire(unsigned long data)
@@ -121,6 +149,9 @@ static void ccid2_hc_tx_rto_expire(unsigned long data)
 	}
 
 	ccid2_pr_debug("RTO_EXPIRE\n");
+
+	if (sk->sk_state == DCCP_CLOSED)
+		goto out;
 
 	/* back-off timer */
 	hc->tx_rto <<= 1;
@@ -145,7 +176,7 @@ static void ccid2_hc_tx_rto_expire(unsigned long data)
 
 	/* if we were blocked before, we may now send cwnd=1 packet */
 	if (sender_was_blocked)
-		tasklet_schedule(&dccp_sk(sk)->dccps_xmitlet);
+		dccp_tasklet_schedule(sk);
 	/* restart backed-off timer */
 	sk_reset_timer(sk, &hc->tx_rtotimer, jiffies + hc->tx_rto);
 out:
@@ -156,7 +187,7 @@ out:
 /*
  *	Congestion window validation (RFC 2861).
  */
-static int ccid2_do_cwv = 1;
+static bool ccid2_do_cwv = true;
 module_param(ccid2_do_cwv, bool, 0644);
 MODULE_PARM_DESC(ccid2_do_cwv, "Perform RFC2861 Congestion Window Validation");
 
@@ -187,6 +218,8 @@ static void ccid2_cwnd_application_limited(struct sock *sk, const u32 now)
 	}
 	hc->tx_cwnd_used  = 0;
 	hc->tx_cwnd_stamp = now;
+
+	ccid2_check_l_ack_ratio(sk);
 }
 
 /* This borrows the code of tcp_cwnd_restart() */
@@ -195,16 +228,20 @@ static void ccid2_cwnd_restart(struct sock *sk, const u32 now)
 	struct ccid2_hc_tx_sock *hc = ccid2_hc_tx_sk(sk);
 	u32 cwnd = hc->tx_cwnd, restart_cwnd,
 	    iwnd = rfc3390_bytes_to_packets(dccp_sk(sk)->dccps_mss_cache);
+	s32 delta = now - hc->tx_lsndtime;
 
 	hc->tx_ssthresh = max(hc->tx_ssthresh, (cwnd >> 1) + (cwnd >> 2));
 
 	/* don't reduce cwnd below the initial window (IW) */
 	restart_cwnd = min(cwnd, iwnd);
-	cwnd >>= (now - hc->tx_lsndtime) / hc->tx_rto;
-	hc->tx_cwnd = max(cwnd, restart_cwnd);
 
+	while ((delta -= hc->tx_rto) >= 0 && cwnd > restart_cwnd)
+		cwnd >>= 1;
+	hc->tx_cwnd = max(cwnd, restart_cwnd);
 	hc->tx_cwnd_stamp = now;
 	hc->tx_cwnd_used  = 0;
+
+	ccid2_check_l_ack_ratio(sk);
 }
 
 static void ccid2_hc_tx_packet_sent(struct sock *sk, unsigned int len)
@@ -405,17 +442,37 @@ static void ccid2_new_ack(struct sock *sk, struct ccid2_seq *seqp,
 			  unsigned int *maxincr)
 {
 	struct ccid2_hc_tx_sock *hc = ccid2_hc_tx_sk(sk);
+	struct dccp_sock *dp = dccp_sk(sk);
+	int r_seq_used = hc->tx_cwnd / dp->dccps_l_ack_ratio;
 
-	if (hc->tx_cwnd < hc->tx_ssthresh) {
-		if (*maxincr > 0 && ++hc->tx_packets_acked == 2) {
+	if (hc->tx_cwnd < dp->dccps_l_seq_win &&
+	    r_seq_used < dp->dccps_r_seq_win) {
+		if (hc->tx_cwnd < hc->tx_ssthresh) {
+			if (*maxincr > 0 && ++hc->tx_packets_acked >= 2) {
+				hc->tx_cwnd += 1;
+				*maxincr    -= 1;
+				hc->tx_packets_acked = 0;
+			}
+		} else if (++hc->tx_packets_acked >= hc->tx_cwnd) {
 			hc->tx_cwnd += 1;
-			*maxincr    -= 1;
 			hc->tx_packets_acked = 0;
 		}
-	} else if (++hc->tx_packets_acked >= hc->tx_cwnd) {
-			hc->tx_cwnd += 1;
-			hc->tx_packets_acked = 0;
 	}
+
+	/*
+	 * Adjust the local sequence window and the ack ratio to allow about
+	 * 5 times the number of packets in the network (RFC 4340 7.5.2)
+	 */
+	if (r_seq_used * CCID2_WIN_CHANGE_FACTOR >= dp->dccps_r_seq_win)
+		ccid2_change_l_ack_ratio(sk, dp->dccps_l_ack_ratio * 2);
+	else if (r_seq_used * CCID2_WIN_CHANGE_FACTOR < dp->dccps_r_seq_win/2)
+		ccid2_change_l_ack_ratio(sk, dp->dccps_l_ack_ratio / 2 ? : 1U);
+
+	if (hc->tx_cwnd * CCID2_WIN_CHANGE_FACTOR >= dp->dccps_l_seq_win)
+		ccid2_change_l_seq_window(sk, dp->dccps_l_seq_win * 2);
+	else if (hc->tx_cwnd * CCID2_WIN_CHANGE_FACTOR < dp->dccps_l_seq_win/2)
+		ccid2_change_l_seq_window(sk, dp->dccps_l_seq_win / 2);
+
 	/*
 	 * FIXME: RTT is sampled several times per acknowledgment (for each
 	 * entry in the Ack Vector), instead of once per Ack (as in TCP SACK).
@@ -441,9 +498,7 @@ static void ccid2_congestion_event(struct sock *sk, struct ccid2_seq *seqp)
 	hc->tx_cwnd      = hc->tx_cwnd / 2 ? : 1U;
 	hc->tx_ssthresh  = max(hc->tx_cwnd, 2U);
 
-	/* Avoid spurious timeouts resulting from Ack Ratio > cwnd */
-	if (dccp_sk(sk)->dccps_l_ack_ratio > hc->tx_cwnd)
-		ccid2_change_l_ack_ratio(sk, hc->tx_cwnd);
+	ccid2_check_l_ack_ratio(sk);
 }
 
 static int ccid2_hc_tx_parse_options(struct sock *sk, u8 packet_type,
@@ -494,8 +549,16 @@ static void ccid2_hc_tx_packet_recv(struct sock *sk, struct sk_buff *skb)
 			if (hc->tx_rpdupack >= NUMDUPACK) {
 				hc->tx_rpdupack = -1; /* XXX lame */
 				hc->tx_rpseq    = 0;
-
+#ifdef __CCID2_COPES_GRACEFULLY_WITH_ACK_CONGESTION_CONTROL__
+				/*
+				 * FIXME: Ack Congestion Control is broken; in
+				 * the current state instabilities occurred with
+				 * Ack Ratios greater than 1; causing hang-ups
+				 * and long RTO timeouts. This needs to be fixed
+				 * before opening up dynamic changes. -- gerrit
+				 */
 				ccid2_change_l_ack_ratio(sk, 2 * dp->dccps_l_ack_ratio);
+#endif
 			}
 		}
 	}
@@ -655,7 +718,7 @@ static void ccid2_hc_tx_packet_recv(struct sock *sk, struct sk_buff *skb)
 done:
 	/* check if incoming Acks allow pending packets to be sent */
 	if (sender_was_blocked && !ccid2_cwnd_network_limited(hc))
-		tasklet_schedule(&dccp_sk(sk)->dccps_xmitlet);
+		dccp_tasklet_schedule(sk);
 	dccp_ackvec_parsed_cleanup(&hc->tx_av_chunks);
 }
 
@@ -701,6 +764,7 @@ static void ccid2_hc_tx_exit(struct sock *sk)
 	for (i = 0; i < hc->tx_seqbufc; i++)
 		kfree(hc->tx_seqbuf[i]);
 	hc->tx_seqbufc = 0;
+	dccp_ackvec_parsed_cleanup(&hc->tx_av_chunks);
 }
 
 static void ccid2_hc_rx_packet_recv(struct sock *sk, struct sk_buff *skb)

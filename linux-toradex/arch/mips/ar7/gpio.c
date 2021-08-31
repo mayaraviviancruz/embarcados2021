@@ -21,7 +21,10 @@
 #include <linux/module.h>
 #include <linux/gpio.h>
 
-#include <asm/mach-ar7/gpio.h>
+#include <asm/mach-ar7/ar7.h>
+
+#define AR7_GPIO_MAX 32
+#define TITAN_GPIO_MAX 51
 
 struct ar7_gpio_chip {
 	void __iomem		*regs;
@@ -217,7 +220,7 @@ struct titan_gpio_cfg {
 	u32 func;
 };
 
-static struct titan_gpio_cfg titan_gpio_table[] = {
+static const struct titan_gpio_cfg titan_gpio_table[] = {
 	/* reg, start bit, mux value */
 	{4, 24, 1},
 	{4, 26, 1},

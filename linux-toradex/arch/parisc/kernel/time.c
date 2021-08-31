@@ -29,6 +29,7 @@
 #include <asm/uaccess.h>
 #include <asm/io.h>
 #include <asm/irq.h>
+#include <asm/page.h>
 #include <asm/param.h>
 #include <asm/pdc.h>
 #include <asm/led.h>
@@ -198,12 +199,9 @@ static struct clocksource clocksource_cr16 = {
 	.rating			= 300,
 	.read			= read_cr16,
 	.mask			= CLOCKSOURCE_MASK(BITS_PER_LONG),
-	.mult			= 0, /* to be set */
-	.shift			= 22,
 	.flags			= CLOCK_SOURCE_IS_CONTINUOUS,
 };
 
-#ifdef CONFIG_SMP
 int update_cr16_clocksource(void)
 {
 	/* since the cr16 cycle counters are not synchronized across CPUs,
@@ -215,12 +213,6 @@ int update_cr16_clocksource(void)
 
 	return 0;
 }
-#else
-int update_cr16_clocksource(void)
-{
-	return 0; /* no change */
-}
-#endif /*CONFIG_SMP*/
 
 void __init start_cpu_itimer(void)
 {
@@ -232,20 +224,14 @@ void __init start_cpu_itimer(void)
 	per_cpu(cpu_data, cpu).it_value = next_tick;
 }
 
-static struct platform_device rtc_generic_dev = {
-	.name = "rtc-generic",
-	.id = -1,
-};
-
 static int __init rtc_init(void)
 {
-	if (platform_device_register(&rtc_generic_dev) < 0)
-		printk(KERN_ERR "unable to register rtc device...\n");
+	struct platform_device *pdev;
 
-	/* not necessarily an error */
-	return 0;
+	pdev = platform_device_register_simple("rtc-generic", -1, NULL, 0);
+	return PTR_ERR_OR_ZERO(pdev);
 }
-module_init(rtc_init);
+device_initcall(rtc_init);
 
 void read_persistent_clock(struct timespec *ts)
 {
@@ -270,7 +256,5 @@ void __init time_init(void)
 
 	/* register at clocksource framework */
 	current_cr16_khz = PAGE0->mem_10msec/10;  /* kHz */
-	clocksource_cr16.mult = clocksource_khz2mult(current_cr16_khz,
-						clocksource_cr16.shift);
-	clocksource_register(&clocksource_cr16);
+	clocksource_register_khz(&clocksource_cr16, current_cr16_khz);
 }

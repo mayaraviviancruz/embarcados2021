@@ -20,6 +20,7 @@
 #include <linux/i2c.h>
 #include <linux/platform_device.h>
 #include <linux/mfd/tps65910.h>
+#include <linux/of_device.h>
 
 struct tps65910_gpio {
 	struct gpio_chip gpio_chip;
@@ -81,7 +82,38 @@ static int tps65910_gpio_input(struct gpio_chip *gc, unsigned offset)
 						GPIO_CFG_MASK);
 }
 
-static int __devinit tps65910_gpio_probe(struct platform_device *pdev)
+#ifdef CONFIG_OF
+static struct tps65910_board *tps65910_parse_dt_for_gpio(struct device *dev,
+		struct tps65910 *tps65910, int chip_ngpio)
+{
+	struct tps65910_board *tps65910_board = tps65910->of_plat_data;
+	unsigned int prop_array[TPS6591X_MAX_NUM_GPIO];
+	int ngpio = min(chip_ngpio, TPS6591X_MAX_NUM_GPIO);
+	int ret;
+	int idx;
+
+	tps65910_board->gpio_base = -1;
+	ret = of_property_read_u32_array(tps65910->dev->of_node,
+			"ti,en-gpio-sleep", prop_array, ngpio);
+	if (ret < 0) {
+		dev_dbg(dev, "ti,en-gpio-sleep not specified\n");
+		return tps65910_board;
+	}
+
+	for (idx = 0; idx < ngpio; idx++)
+		tps65910_board->en_gpio_sleep[idx] = (prop_array[idx] != 0);
+
+	return tps65910_board;
+}
+#else
+static struct tps65910_board *tps65910_parse_dt_for_gpio(struct device *dev,
+		struct tps65910 *tps65910, int chip_ngpio)
+{
+	return NULL;
+}
+#endif
+
+static int tps65910_gpio_probe(struct platform_device *pdev)
 {
 	struct tps65910 *tps65910 = dev_get_drvdata(pdev->dev.parent);
 	struct tps65910_board *pdata = dev_get_platdata(tps65910->dev);
@@ -91,17 +123,15 @@ static int __devinit tps65910_gpio_probe(struct platform_device *pdev)
 
 	tps65910_gpio = devm_kzalloc(&pdev->dev,
 				sizeof(*tps65910_gpio), GFP_KERNEL);
-	if (!tps65910_gpio) {
-		dev_err(&pdev->dev, "Could not allocate tps65910_gpio\n");
+	if (!tps65910_gpio)
 		return -ENOMEM;
-	}
 
 	tps65910_gpio->tps65910 = tps65910;
 
 	tps65910_gpio->gpio_chip.owner = THIS_MODULE;
 	tps65910_gpio->gpio_chip.label = tps65910->i2c_client->name;
 
-	switch(tps65910_chip_id(tps65910)) {
+	switch (tps65910_chip_id(tps65910)) {
 	case TPS65910:
 		tps65910_gpio->gpio_chip.ngpio = TPS65910_NUM_GPIO;
 		break;
@@ -111,16 +141,23 @@ static int __devinit tps65910_gpio_probe(struct platform_device *pdev)
 	default:
 		return -EINVAL;
 	}
-	tps65910_gpio->gpio_chip.can_sleep = 1;
+	tps65910_gpio->gpio_chip.can_sleep = true;
 	tps65910_gpio->gpio_chip.direction_input = tps65910_gpio_input;
 	tps65910_gpio->gpio_chip.direction_output = tps65910_gpio_output;
 	tps65910_gpio->gpio_chip.set	= tps65910_gpio_set;
 	tps65910_gpio->gpio_chip.get	= tps65910_gpio_get;
 	tps65910_gpio->gpio_chip.dev = &pdev->dev;
+#ifdef CONFIG_OF_GPIO
+	tps65910_gpio->gpio_chip.of_node = tps65910->dev->of_node;
+#endif
 	if (pdata && pdata->gpio_base)
 		tps65910_gpio->gpio_chip.base = pdata->gpio_base;
 	else
 		tps65910_gpio->gpio_chip.base = -1;
+
+	if (!pdata && tps65910->dev->of_node)
+		pdata = tps65910_parse_dt_for_gpio(&pdev->dev, tps65910,
+			tps65910_gpio->gpio_chip.ngpio);
 
 	if (!pdata)
 		goto skip_init;
@@ -149,18 +186,19 @@ skip_init:
 	return ret;
 }
 
-static int __devexit tps65910_gpio_remove(struct platform_device *pdev)
+static int tps65910_gpio_remove(struct platform_device *pdev)
 {
 	struct tps65910_gpio *tps65910_gpio = platform_get_drvdata(pdev);
 
-	return gpiochip_remove(&tps65910_gpio->gpio_chip);
+	gpiochip_remove(&tps65910_gpio->gpio_chip);
+	return 0;
 }
 
 static struct platform_driver tps65910_gpio_driver = {
 	.driver.name    = "tps65910-gpio",
 	.driver.owner   = THIS_MODULE,
 	.probe		= tps65910_gpio_probe,
-	.remove		= __devexit_p(tps65910_gpio_remove),
+	.remove		= tps65910_gpio_remove,
 };
 
 static int __init tps65910_gpio_init(void)

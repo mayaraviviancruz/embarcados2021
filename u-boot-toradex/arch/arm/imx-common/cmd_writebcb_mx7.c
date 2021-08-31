@@ -24,16 +24,27 @@
 #include <linux/bch.h>
 #include <malloc.h>
 #include <nand.h>
+
+#ifdef CONFIG_MX7
+/*
+ * compare with v5_rom_mtd_commit_structures vs. v6_rom_mtd_commit_structures
+ * in imx-kobs/src/mtd.c
+ */
+#define USE_RANDOMIZER
+#define USE_62_BIT_ECC
+#endif
+
+#ifdef USE_RANDOMIZER
 #include "rand.h"
+#define RAND_16K		(16 * 1024)
+#endif
 
 #define PAGES_PER_STRIDE	64
-#define RAND_16K		(16 * 1024)
 
-#define BOOTLOADER_MAXSIZE	(640 * 1024)
 #define BOOT_SEARCH_COUNT	2 /* match with BOOT_CFG_FUSES [6:5] */
 
-extern int raw_access(nand_info_t *nand, ulong addr, loff_t off, ulong count,
-			int read);
+extern int raw_access(struct mtd_info *info, ulong addr, loff_t off,
+		      ulong count, int read);
 
 struct mxs_nand_fcb {
 	uint32_t		checksum;
@@ -198,6 +209,7 @@ int encode_bch_ecc(void *source_block, size_t source_size, void *target_block,
 	/* gf: FCB_GF */
 	int m, b0, e0, bn, en, n, gf;
 
+#ifdef USE_62_BIT_ECC
 	/* 62 bit BCH, for i.MX6SX and i.MX7D */
 	m = 32;
 	b0 = 128;
@@ -206,6 +218,16 @@ int encode_bch_ecc(void *source_block, size_t source_size, void *target_block,
 	en = 62;
 	n = 7;
 	gf = 13;
+#else
+	/* 40 bit BCH, for i.MX6UL */
+	m  = 32;
+	b0 = 128;
+	e0 = 40;
+	bn = 128;
+	en = 40;
+	n  = 7;
+	gf = 13;
+#endif
 
 	/* sanity check */
 	/* nand data block must be large enough for FCB structure */
@@ -291,13 +313,12 @@ int encode_bch_ecc(void *source_block, size_t source_size, void *target_block,
 	return 0;
 }
 
-static void create_fcb(nand_info_t *nand, uint8_t *buf, int fw1_start_address,
-		       int fw2_start_address)
+static void create_fcb(struct mtd_info *nand, uint8_t *buf,
+		       int fw1_start_address, int fw2_start_address)
 {
 	int i;
 	struct mxs_nand_fcb _fcb;
 	struct mxs_nand_fcb *fcb = &_fcb;
-	int fw_size = BOOTLOADER_MAXSIZE;
 	memset (fcb, 0, sizeof(struct mxs_nand_fcb));
 
 	fcb->fingerprint =		0x20424346;
@@ -316,20 +337,19 @@ static void create_fcb(nand_info_t *nand, uint8_t *buf, int fw1_start_address,
 	fcb->ecc_block_n_size =		512;
 	fcb->ecc_block_0_ecc_type =	4;
 	fcb->metadata_bytes =		10;
-	fcb->num_ecc_blocks_per_page =	2;
+	fcb->num_ecc_blocks_per_page =	3;
 
 	fcb->firmware1_starting_sector = fw1_start_address / nand->writesize;
 	fcb->firmware2_starting_sector = fw2_start_address / nand->writesize;
 
-	fcb->sectors_in_firmware1 =	DIV_ROUND_UP(fw_size, 3 * 512);
-	fcb->sectors_in_firmware2 =	DIV_ROUND_UP(fw_size, 3 * 512);
 	fcb->dbbt_search_area_start_address =	256;
 	fcb->badblock_marker_byte =	1999;
-	fcb->bb_marker_physical_offset =	2048;
+
 	/* This is typically the first byte of the pages OOB area */
 	fcb->bb_marker_physical_offset = nand->writesize;
-	/* workaround bug in bootrom, see errata */
-	fcb->disbbm = 1;
+
+	/* Required for successful factory bad block detection */
+	fcb->disbbm = 0;
 	fcb->disbbm_search = 0;
 
 	/* compute checksum, ~(sum of bytes starting with offset 4) */
@@ -344,7 +364,7 @@ static void create_fcb(nand_info_t *nand, uint8_t *buf, int fw1_start_address,
 #endif
 }
 
-static void create_dbbt(nand_info_t *nand, uint8_t *buf)
+static void create_dbbt(struct mtd_info *nand, uint8_t *buf)
 {
 	int i;
 	struct mxs_nand_dbbt *dbbt = (struct mxs_nand_dbbt *)buf;
@@ -365,54 +385,28 @@ static void create_dbbt(nand_info_t *nand, uint8_t *buf)
 #endif
 }
 
-/* workaround for i.MX 7 errata e9609, use only 3/4
- * of the available chunks in a block and have an
- * FCB with a matching ecc layout and DISBBM set to 1
-*/
-static void write_bootloader(nand_info_t *nand, uint8_t * addr, loff_t off,
-			    ulong fw_size)
-{
-	int i, j, ret;
-	size_t maxsize;
-	unsigned used_page_size, used_page_size_tmp;
-
-	ret = 0;
-	used_page_size = 3 * nand->writesize / 4;
-	maxsize = nand->writesize;
-	for (i = 0, j = 0; i < fw_size;
-	     i += used_page_size, j += nand->writesize) {
-		used_page_size_tmp = used_page_size;
-		ret |= nand_write_skip_bad(nand, off + j, &used_page_size_tmp,
-					  NULL, maxsize, (u_char *)addr + i,
-					  WITH_WR_VERIFY);
-	}
-	printf("Bootloader %d bytes written to 0x%x: %s\n", (int)fw_size,
-		(int) off, ret ? "ERROR" : "OK");
-
-}
-
 static int do_write_bcb(cmd_tbl_t *cmdtp, int flag, int argc,
 			char * const argv[])
 {
-	int j, k, ret;
+	int j, ret;
 	uint8_t *buf;
 	size_t rwsize, maxsize;
 	ulong fw1_off, fw2_off;
 	ulong off;
-	nand_info_t *nand;
+	struct mtd_info *nand;
 
 	int dev = nand_curr_device;
 
 	if (argc < 2)
 		return -1;
 
-	fw1_off = simple_strtoul(argv[2], NULL, 16);
+	fw1_off = simple_strtoul(argv[1], NULL, 16);
 	if (argc > 2)
-		fw2_off = simple_strtoul(argv[3], NULL, 16);
+		fw2_off = simple_strtoul(argv[2], NULL, 16);
 	else
 		fw2_off = 0;
 
-	nand = &nand_info[dev];
+	nand = nand_info[dev];
 
 	/* Allocate one page, should be enought */
 	rwsize = nand->writesize;
@@ -427,7 +421,10 @@ static int do_write_bcb(cmd_tbl_t *cmdtp, int flag, int argc,
 	rwsize = maxsize = nand->writesize;
 
 	off = 0;
-	for(j = 0; j < BOOT_SEARCH_COUNT; j++) {
+	for (j = 0; j < BOOT_SEARCH_COUNT; j++) {
+#ifdef USE_RANDOMIZER
+		int k;
+		/* do randomizer */
 		for (k = 0; k < nand->writesize + nand->oobsize; k++) {
 			*(uint8_t *)(buf + k) ^=
 			RandData[k + ((j * PAGES_PER_STRIDE) % 256)
@@ -438,13 +435,16 @@ static int do_write_bcb(cmd_tbl_t *cmdtp, int flag, int argc,
 #ifdef DEBUG
 		printf("Randomized\n"); dump(buf, 512);
 #endif
+#endif /* USE_RANDOMIZER */
 		ret = raw_access(nand, (ulong) buf, off, 1, 0);
+#ifdef USE_RANDOMIZER
 		/* revert randomizer */
 		for (k = 0; k < nand->writesize + nand->oobsize; k++) {
 			*(uint8_t *)(buf + k) ^=
 			RandData[k + ((j * PAGES_PER_STRIDE) % 256)
 			/ 64 * RAND_16K];
 		}
+#endif /* USE_RANDOMIZER */
 
 		printf("FCB %d bytes written to 0x%x: %s\n", rwsize,
 				(unsigned) off, ret ? "ERROR" : "OK");
@@ -465,56 +465,8 @@ static int do_write_bcb(cmd_tbl_t *cmdtp, int flag, int argc,
 	return 0;
 }
 
-static int do_write_boot(cmd_tbl_t *cmdtp, int flag, int argc,
-			char * const argv[])
-{
-	uint8_t *addr;
-	ulong fw1_off, fw2_off, fw_size;
-	nand_info_t *nand;
-
-	int dev = nand_curr_device;
-
-	if (argc < 4)
-		return -1;
-
-	addr = (uint8_t *)simple_strtoul(argv[1], NULL, 16);
-	fw1_off = simple_strtoul(argv[2], NULL, 16);
-	if (argc > 3) {
-		fw2_off = simple_strtoul(argv[3], NULL, 16);
-		fw_size = simple_strtoul(argv[4], NULL, 16);
-	} else {
-		fw2_off = 0;
-		fw_size = simple_strtoul(argv[3], NULL, 16);
-	}
-
-	/* The FCB copies BOOTLOADER_MAXSIZE into RAM, so we must not allow
-	 * a bigger bootloader */
-	if (fw_size > BOOTLOADER_MAXSIZE) {
-		printf("ERROR: Only %d bytes are copied by bootrom to RAM, your bootloader is %d\n",
-			BOOTLOADER_MAXSIZE, (int) fw_size);
-		return 1;
-	}
-	else
-		fw_size = BOOTLOADER_MAXSIZE;
-
-	nand = &nand_info[dev];
-
-	puts("Write bootloader...\n");
-	write_bootloader(nand, addr, fw1_off, fw_size);
-	if(fw2_off)
-		write_bootloader(nand, addr, fw2_off, fw_size);
-
-	return 0;
-}
-
 U_BOOT_CMD(
 	writebcb, 3, 0, do_write_bcb,
 	"Write Boot Control Block (FCB and DBBT)",
 	"fw1-off [fw2-off]"
-);
-
-U_BOOT_CMD(
-	writeboot, 5, 0, do_write_boot,
-	"Write bootloadder",
-	"addr fw1-off [fw2-off] fw_size"
 );

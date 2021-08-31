@@ -23,7 +23,7 @@
 #include <linux/module.h>
 #include <linux/interrupt.h>
 #include <linux/ioport.h>
-#include <linux/sysdev.h>
+#include <linux/device.h>
 #include <linux/io.h>
 
 #include <mach/hardware.h>
@@ -172,6 +172,6 @@ void __init ks8695_init_irq(void)
 							 handle_edge_irq);
 		}
 
-		set_irq_flags(irq, IRQF_VALID);
+		irq_clear_status_flags(irq, IRQ_NOREQUEST);
 	}
 }

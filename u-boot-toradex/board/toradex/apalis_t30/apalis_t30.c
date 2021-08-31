@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2015 Toradex, Inc.
+ * Copyright (c) 2012-2017 Toradex, Inc.
  *
  * SPDX-License-Identifier:	GPL-2.0+
  */
@@ -13,15 +13,23 @@
 #include <asm/io.h>
 #include <dm.h>
 #include <i2c.h>
-#include <netdev.h>
+#include <fdt_support.h>
+#include <pci_tegra.h>
+#include "../common/tdx-common.h"
 
 #include "pinmux-config-apalis_t30.h"
-#include "../common/configblock.h"
 
 DECLARE_GLOBAL_DATA_PTR;
 
 #define PMU_I2C_ADDRESS		0x2D
 #define MAX_I2C_RETRY		3
+
+#ifdef CONFIG_APALIS_T30_PCIE_EVALBOARD_INIT
+#define PEX_PERST_N	TEGRA_GPIO(S, 7) /* Apalis GPIO7 */
+#define RESET_MOCI_CTRL	TEGRA_GPIO(I, 4)
+
+static int pci_reset_status;
+#endif /* CONFIG_APALIS_T30_PCIE_EVALBOARD_INIT */
 
 int arch_misc_init(void)
 {
@@ -47,18 +55,54 @@ int arch_misc_init(void)
 	if (readl(NV_PA_BASE_SRAM + NVBOOTINFOTABLE_BOOTTYPE) ==
 	    NVBOOTTYPE_RECOVERY) {
 		printf("USB recovery mode, disabled autoboot\n");
+#ifdef CONFIG_TDX_EASY_INSTALLER
+		setenv("bootdelay", "-2");
+		setenv("defargs", "pcie_aspm=off user_debug=30");
+		setenv("fdt_high", "");
+		setenv("initrd_high", "");
+		setenv("setup", "setenv setupargs igb_mac=${ethaddr} " \
+			"consoleblank=0 no_console_suspend=1 " \
+			"console=${console},${baudrate}n8 ${memargs}");
+		setenv("teziargs", "rootfstype=squashfs root=/dev/ram quiet " \
+			"autoinstall");
+		setenv("vidargs", "video=HDMI-A-1:640x480-16@60D video=LVDS-1:640x480-16@60D");
+		setenv("bootcmd", "run setup; setenv bootargs ${defargs} " \
+			"${setupargs} ${vidargs} ${teziargs}; " \
+			"bootm 0x80208000");
+#else /* CONFIG_TDX_EASY_INSTALLER */
 		setenv("bootdelay", "-1");
+#endif /* CONFIG_TDX_EASY_INSTALLER */
 	}
 
 	return 0;
 }
 
-int checkboard_fallback(void)
+int checkboard(void)
 {
-	printf("Model: Toradex Apalis T30 %dGB\n", (gd->ram_size == 0x40000000)?1:2);
+	printf("Model: Toradex Apalis T30 %dGB\n",
+	       (gd->ram_size == 0x40000000) ? 1 : 2);
 
 	return 0;
 }
+
+#if defined(CONFIG_OF_LIBFDT) && defined(CONFIG_OF_BOARD_SETUP)
+int ft_board_setup(void *blob, bd_t *bd)
+{
+	uint8_t enetaddr[6];
+
+	/* MAC addr */
+	if (eth_getenv_enetaddr("ethaddr", enetaddr)) {
+		int err = fdt_find_and_setprop(blob,
+				     "/pcie@3000/pci@3,0/pcie@0",
+				     "local-mac-address", enetaddr, 6, 0);
+
+		if (err >= 0)
+			puts("   MAC address updated...\n");
+	}
+
+	return ft_common_board_setup(blob, bd);
+}
+#endif
 
 /*
  * Routine: pinmux_init
@@ -120,11 +164,61 @@ int tegra_pcie_board_init(void)
 		return err;
 	}
 
+#ifdef CONFIG_APALIS_T30_PCIE_EVALBOARD_INIT
+	gpio_request(PEX_PERST_N, "PEX_PERST_N");
+	gpio_request(RESET_MOCI_CTRL, "RESET_MOCI_CTRL");
+#endif /* CONFIG_APALIS_T30_PCIE_EVALBOARD_INIT */
+
 	return 0;
 }
 
-int board_eth_init(bd_t *bis)
+void tegra_pcie_board_port_reset(struct tegra_pcie_port *port)
 {
-	return pci_eth_init(bis);
+	int index = tegra_pcie_port_index_of_port(port);
+	if (index == 2) { /* I210 Gigabit Ethernet Controller (On-module) */
+		tegra_pcie_port_reset(port);
+	}
+#ifdef CONFIG_APALIS_T30_PCIE_EVALBOARD_INIT
+	/*
+	 * Apalis PCIe aka port 1 and Apalis Type Specific 4 Lane PCIe aka port
+	 * 0 share the same RESET_MOCI therefore only assert it once for both
+	 * ports to avoid loosing the previously brought up port again.
+	 */
+	else if ((index == 1) || (index == 0)) {
+		/* only do it once per init cycle */
+		if (pci_reset_status % 2 == 0) {
+			/*
+			 * Reset PLX PEX 8605 PCIe Switch plus PCIe devices on
+			 * Apalis Evaluation Board
+			 */
+			gpio_direction_output(PEX_PERST_N, 0);
+			gpio_direction_output(RESET_MOCI_CTRL, 0);
+
+			/*
+			 * Must be asserted for 100 ms after power and clocks
+			 * are stable
+			 */
+			mdelay(100);
+
+			gpio_set_value(PEX_PERST_N, 1);
+			/*
+			 * Err_5: PEX_REFCLK_OUTpx/nx Clock Outputs is not
+			 * Guaranteed Until 900 us After PEX_PERST# De-assertion
+			 */
+			mdelay(1);
+			gpio_set_value(RESET_MOCI_CTRL, 1);
+		}
+		pci_reset_status++;
+	}
+#endif /* CONFIG_APALIS_T30_PCIE_EVALBOARD_INIT */
 }
 #endif /* CONFIG_PCI_TEGRA */
+
+/*
+ * Backlight off before OS handover
+ */
+void board_preboot_os(void)
+{
+	gpio_request(TEGRA_GPIO(V, 2), "BKL1_ON");
+	gpio_direction_output(TEGRA_GPIO(V, 2), 0);
+}

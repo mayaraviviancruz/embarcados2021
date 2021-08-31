@@ -66,8 +66,14 @@ void __init setup_gptimer0(void)
 {
 	disable_gptimers(TIMER0bit);
 
+#ifdef CONFIG_BF60x
+	bfin_write16(TIMER_DATA_IMSK, 0);
+	set_gptimer_config(TIMER0_id,  TIMER_OUT_DIS
+		| TIMER_MODE_PWM_CONT | TIMER_PULSE_HI | TIMER_IRQ_PER);
+#else
 	set_gptimer_config(TIMER0_id, \
 		TIMER_OUT_DIS | TIMER_PERIOD_CNT | TIMER_MODE_PWM);
+#endif
 	set_gptimer_period(TIMER0_id, -1);
 	set_gptimer_pwidth(TIMER0_id, -2);
 	SSYNC();
@@ -130,37 +136,49 @@ static int bfin_gptmr0_set_next_event(unsigned long cycles,
 	return 0;
 }
 
-static void bfin_gptmr0_set_mode(enum clock_event_mode mode,
-				struct clock_event_device *evt)
+static int bfin_gptmr0_set_periodic(struct clock_event_device *evt)
 {
-	switch (mode) {
-	case CLOCK_EVT_MODE_PERIODIC: {
-		set_gptimer_config(TIMER0_id, \
-			TIMER_OUT_DIS | TIMER_IRQ_ENA | \
-			TIMER_PERIOD_CNT | TIMER_MODE_PWM);
-		set_gptimer_period(TIMER0_id, get_sclk() / HZ);
-		set_gptimer_pwidth(TIMER0_id, get_sclk() / HZ - 1);
-		enable_gptimers(TIMER0bit);
-		break;
-	}
-	case CLOCK_EVT_MODE_ONESHOT:
-		disable_gptimers(TIMER0bit);
-		set_gptimer_config(TIMER0_id, \
-			TIMER_OUT_DIS | TIMER_IRQ_ENA | TIMER_MODE_PWM);
-		set_gptimer_period(TIMER0_id, 0);
-		break;
-	case CLOCK_EVT_MODE_UNUSED:
-	case CLOCK_EVT_MODE_SHUTDOWN:
-		disable_gptimers(TIMER0bit);
-		break;
-	case CLOCK_EVT_MODE_RESUME:
-		break;
-	}
+#ifndef CONFIG_BF60x
+	set_gptimer_config(TIMER0_id,
+			   TIMER_OUT_DIS | TIMER_IRQ_ENA |
+			   TIMER_PERIOD_CNT | TIMER_MODE_PWM);
+#else
+	set_gptimer_config(TIMER0_id,
+			   TIMER_OUT_DIS | TIMER_MODE_PWM_CONT |
+			   TIMER_PULSE_HI | TIMER_IRQ_PER);
+#endif
+
+	set_gptimer_period(TIMER0_id, get_sclk() / HZ);
+	set_gptimer_pwidth(TIMER0_id, get_sclk() / HZ - 1);
+	enable_gptimers(TIMER0bit);
+	return 0;
+}
+
+static int bfin_gptmr0_set_oneshot(struct clock_event_device *evt)
+{
+	disable_gptimers(TIMER0bit);
+#ifndef CONFIG_BF60x
+	set_gptimer_config(TIMER0_id,
+			   TIMER_OUT_DIS | TIMER_IRQ_ENA | TIMER_MODE_PWM);
+#else
+	set_gptimer_config(TIMER0_id,
+			   TIMER_OUT_DIS | TIMER_MODE_PWM | TIMER_PULSE_HI |
+			   TIMER_IRQ_WID_DLY);
+#endif
+
+	set_gptimer_period(TIMER0_id, 0);
+	return 0;
+}
+
+static int bfin_gptmr0_shutdown(struct clock_event_device *evt)
+{
+	disable_gptimers(TIMER0bit);
+	return 0;
 }
 
 static void bfin_gptmr0_ack(void)
 {
-	set_gptimer_status(TIMER_GROUP1, TIMER_STATUS_TIMIL0);
+	clear_gptimer_intr(TIMER0_id);
 }
 
 static void __init bfin_gptmr0_init(void)
@@ -188,19 +206,21 @@ irqreturn_t bfin_gptmr0_interrupt(int irq, void *dev_id)
 
 static struct irqaction gptmr0_irq = {
 	.name		= "Blackfin GPTimer0",
-	.flags		= IRQF_DISABLED | IRQF_TIMER | \
-			  IRQF_IRQPOLL | IRQF_PERCPU,
+	.flags		= IRQF_TIMER | IRQF_IRQPOLL | IRQF_PERCPU,
 	.handler	= bfin_gptmr0_interrupt,
 };
 
 static struct clock_event_device clockevent_gptmr0 = {
-	.name		= "bfin_gptimer0",
-	.rating		= 300,
-	.irq		= IRQ_TIMER0,
-	.shift		= 32,
-	.features	= CLOCK_EVT_FEAT_PERIODIC | CLOCK_EVT_FEAT_ONESHOT,
-	.set_next_event = bfin_gptmr0_set_next_event,
-	.set_mode	= bfin_gptmr0_set_mode,
+	.name			= "bfin_gptimer0",
+	.rating			= 300,
+	.irq			= IRQ_TIMER0,
+	.shift			= 32,
+	.features		= CLOCK_EVT_FEAT_PERIODIC |
+				  CLOCK_EVT_FEAT_ONESHOT,
+	.set_next_event		= bfin_gptmr0_set_next_event,
+	.set_state_shutdown	= bfin_gptmr0_shutdown,
+	.set_state_periodic	= bfin_gptmr0_set_periodic,
+	.set_state_oneshot	= bfin_gptmr0_set_oneshot,
 };
 
 static void __init bfin_gptmr0_clockevent_init(struct clock_event_device *evt)
@@ -220,7 +240,7 @@ static void __init bfin_gptmr0_clockevent_init(struct clock_event_device *evt)
 
 #if defined(CONFIG_TICKSOURCE_CORETMR)
 /* per-cpu local core timer */
-static DEFINE_PER_CPU(struct clock_event_device, coretmr_events);
+DEFINE_PER_CPU(struct clock_event_device, coretmr_events);
 
 static int bfin_coretmr_set_next_event(unsigned long cycles,
 				struct clock_event_device *evt)
@@ -233,36 +253,35 @@ static int bfin_coretmr_set_next_event(unsigned long cycles,
 	return 0;
 }
 
-static void bfin_coretmr_set_mode(enum clock_event_mode mode,
-				struct clock_event_device *evt)
+static int bfin_coretmr_set_periodic(struct clock_event_device *evt)
 {
-	switch (mode) {
-	case CLOCK_EVT_MODE_PERIODIC: {
-		unsigned long tcount = ((get_cclk() / (HZ * TIME_SCALE)) - 1);
-		bfin_write_TCNTL(TMPWR);
-		CSYNC();
-		bfin_write_TSCALE(TIME_SCALE - 1);
-		bfin_write_TPERIOD(tcount);
-		bfin_write_TCOUNT(tcount);
-		CSYNC();
-		bfin_write_TCNTL(TMPWR | TMREN | TAUTORLD);
-		break;
-	}
-	case CLOCK_EVT_MODE_ONESHOT:
-		bfin_write_TCNTL(TMPWR);
-		CSYNC();
-		bfin_write_TSCALE(TIME_SCALE - 1);
-		bfin_write_TPERIOD(0);
-		bfin_write_TCOUNT(0);
-		break;
-	case CLOCK_EVT_MODE_UNUSED:
-	case CLOCK_EVT_MODE_SHUTDOWN:
-		bfin_write_TCNTL(0);
-		CSYNC();
-		break;
-	case CLOCK_EVT_MODE_RESUME:
-		break;
-	}
+	unsigned long tcount = ((get_cclk() / (HZ * TIME_SCALE)) - 1);
+
+	bfin_write_TCNTL(TMPWR);
+	CSYNC();
+	bfin_write_TSCALE(TIME_SCALE - 1);
+	bfin_write_TPERIOD(tcount);
+	bfin_write_TCOUNT(tcount);
+	CSYNC();
+	bfin_write_TCNTL(TMPWR | TMREN | TAUTORLD);
+	return 0;
+}
+
+static int bfin_coretmr_set_oneshot(struct clock_event_device *evt)
+{
+	bfin_write_TCNTL(TMPWR);
+	CSYNC();
+	bfin_write_TSCALE(TIME_SCALE - 1);
+	bfin_write_TPERIOD(0);
+	bfin_write_TCOUNT(0);
+	return 0;
+}
+
+static int bfin_coretmr_shutdown(struct clock_event_device *evt)
+{
+	bfin_write_TCNTL(0);
+	CSYNC();
+	return 0;
 }
 
 void bfin_coretmr_init(void)
@@ -282,6 +301,7 @@ void bfin_coretmr_init(void)
 #ifdef CONFIG_CORE_TIMER_IRQ_L1
 __attribute__((l1_text))
 #endif
+
 irqreturn_t bfin_coretmr_interrupt(int irq, void *dev_id)
 {
 	int cpu = smp_processor_id();
@@ -297,8 +317,7 @@ irqreturn_t bfin_coretmr_interrupt(int irq, void *dev_id)
 
 static struct irqaction coretmr_irq = {
 	.name		= "Blackfin CoreTimer",
-	.flags		= IRQF_DISABLED | IRQF_TIMER | \
-			  IRQF_IRQPOLL | IRQF_PERCPU,
+	.flags		= IRQF_TIMER | IRQF_IRQPOLL | IRQF_PERCPU,
 	.handler	= bfin_coretmr_interrupt,
 };
 
@@ -308,13 +327,19 @@ void bfin_coretmr_clockevent_init(void)
 	unsigned int cpu = smp_processor_id();
 	struct clock_event_device *evt = &per_cpu(coretmr_events, cpu);
 
+#ifdef CONFIG_SMP
+	evt->broadcast = smp_timer_broadcast;
+#endif
+
 	evt->name = "bfin_core_timer";
 	evt->rating = 350;
 	evt->irq = -1;
 	evt->shift = 32;
 	evt->features = CLOCK_EVT_FEAT_PERIODIC | CLOCK_EVT_FEAT_ONESHOT;
 	evt->set_next_event = bfin_coretmr_set_next_event;
-	evt->set_mode = bfin_coretmr_set_mode;
+	evt->set_state_shutdown = bfin_coretmr_shutdown;
+	evt->set_state_periodic = bfin_coretmr_set_periodic;
+	evt->set_state_oneshot = bfin_coretmr_set_oneshot;
 
 	clock_tick = get_cclk() / TIME_SCALE;
 	evt->mult = div_sc(clock_tick, NSEC_PER_SEC, evt->shift);

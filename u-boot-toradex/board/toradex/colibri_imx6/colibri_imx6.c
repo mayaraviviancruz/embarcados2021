@@ -1,38 +1,47 @@
 /*
  * Copyright (C) 2010-2013 Freescale Semiconductor, Inc.
  * Copyright (C) 2013, Boundary Devices <info@boundarydevices.com>
- * Copyright (C) 2014-2015, Toradex AG
+ * Copyright (C) 2014-2016, Toradex AG
  * copied from nitrogen6x
  *
  * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
-#include <asm/io.h>
 #include <asm/arch/clock.h>
+#include <asm/arch/crm_regs.h>
 #include <asm/arch/imx-regs.h>
 #include <asm/arch/iomux.h>
-#include <asm/arch/sys_proto.h>
-#include <malloc.h>
 #include <asm/arch/mx6-pins.h>
-#include <asm/errno.h>
+#include <asm/arch/mx6-ddr.h>
+#include <asm/arch/mxc_hdmi.h>
+#include <asm/arch/sys_proto.h>
+#include <asm/bootm.h>
 #include <asm/gpio.h>
 #include <asm/imx-common/iomux-v3.h>
 #include <asm/imx-common/mxc_i2c.h>
-#include <asm/imx-common/sata.h>
 #include <asm/imx-common/boot_mode.h>
 #include <asm/imx-common/video.h>
-#include <mmc.h>
+#include <asm/io.h>
+#include <dm/platform_data/serial_mxc.h>
+#include <dm/platdata.h>
 #include <fsl_esdhc.h>
+#include <g_dnl.h>
+#include <i2c.h>
+#include <imx_thermal.h>
+#include <linux/errno.h>
+#include <malloc.h>
 #include <micrel.h>
 #include <miiphy.h>
+#include <mmc.h>
 #include <netdev.h>
-#include <asm/arch/crm_regs.h>
-#include <asm/arch/mxc_hdmi.h>
-#include <i2c.h>
+#include <libfdt.h>
+#include <cpu.h>
+#include <usb.h>
+#include <usb/ehci-ci.h>
 
-#include "../common/configblock.h"
-#ifdef CONFIG_TRDX_CMD_IMX_MFGR
+#include "../common/tdx-cfg-block.h"
+#ifdef CONFIG_TDX_CMD_IMX_MFGR
 #include "pf0100.h"
 #endif
 
@@ -43,6 +52,10 @@ DECLARE_GLOBAL_DATA_PTR;
 	PAD_CTL_SRE_FAST  | PAD_CTL_HYS)
 
 #define USDHC_PAD_CTRL (PAD_CTL_PUS_47K_UP |			\
+	PAD_CTL_SPEED_LOW | PAD_CTL_DSE_40ohm |			\
+	PAD_CTL_SRE_FAST  | PAD_CTL_HYS)
+
+#define USDHC_EMMC_PAD_CTRL (PAD_CTL_PUS_47K_UP |		\
 	PAD_CTL_SPEED_LOW | PAD_CTL_DSE_80ohm |			\
 	PAD_CTL_SRE_FAST  | PAD_CTL_HYS)
 
@@ -74,8 +87,6 @@ DECLARE_GLOBAL_DATA_PTR;
 #define OUTPUT_40OHM (PAD_CTL_SPEED_MED|PAD_CTL_DSE_40ohm)
 
 #define OUTPUT_RGB (PAD_CTL_SPEED_MED|PAD_CTL_DSE_60ohm|PAD_CTL_SRE_FAST)
-
-u32 get_board_rev(void);
 
 int dram_init(void)
 {
@@ -135,16 +146,16 @@ iomux_v3_cfg_t const usdhc1_pads[] = {
 
 /* eMMC */
 iomux_v3_cfg_t const usdhc3_pads[] = {
-	MX6_PAD_SD3_CLK__SD3_CLK    | MUX_PAD_CTRL(USDHC_PAD_CTRL),
-	MX6_PAD_SD3_CMD__SD3_CMD    | MUX_PAD_CTRL(USDHC_PAD_CTRL),
-	MX6_PAD_SD3_DAT0__SD3_DATA0 | MUX_PAD_CTRL(USDHC_PAD_CTRL),
-	MX6_PAD_SD3_DAT1__SD3_DATA1 | MUX_PAD_CTRL(USDHC_PAD_CTRL),
-	MX6_PAD_SD3_DAT2__SD3_DATA2 | MUX_PAD_CTRL(USDHC_PAD_CTRL),
-	MX6_PAD_SD3_DAT3__SD3_DATA3 | MUX_PAD_CTRL(USDHC_PAD_CTRL),
-	MX6_PAD_SD3_DAT4__SD3_DATA4 | MUX_PAD_CTRL(USDHC_PAD_CTRL),
-	MX6_PAD_SD3_DAT5__SD3_DATA5 | MUX_PAD_CTRL(USDHC_PAD_CTRL),
-	MX6_PAD_SD3_DAT6__SD3_DATA6 | MUX_PAD_CTRL(USDHC_PAD_CTRL),
-	MX6_PAD_SD3_DAT7__SD3_DATA7 | MUX_PAD_CTRL(USDHC_PAD_CTRL),
+	MX6_PAD_SD3_CLK__SD3_CLK    | MUX_PAD_CTRL(USDHC_EMMC_PAD_CTRL),
+	MX6_PAD_SD3_CMD__SD3_CMD    | MUX_PAD_CTRL(USDHC_EMMC_PAD_CTRL),
+	MX6_PAD_SD3_DAT0__SD3_DATA0 | MUX_PAD_CTRL(USDHC_EMMC_PAD_CTRL),
+	MX6_PAD_SD3_DAT1__SD3_DATA1 | MUX_PAD_CTRL(USDHC_EMMC_PAD_CTRL),
+	MX6_PAD_SD3_DAT2__SD3_DATA2 | MUX_PAD_CTRL(USDHC_EMMC_PAD_CTRL),
+	MX6_PAD_SD3_DAT3__SD3_DATA3 | MUX_PAD_CTRL(USDHC_EMMC_PAD_CTRL),
+	MX6_PAD_SD3_DAT4__SD3_DATA4 | MUX_PAD_CTRL(USDHC_EMMC_PAD_CTRL),
+	MX6_PAD_SD3_DAT5__SD3_DATA5 | MUX_PAD_CTRL(USDHC_EMMC_PAD_CTRL),
+	MX6_PAD_SD3_DAT6__SD3_DATA6 | MUX_PAD_CTRL(USDHC_EMMC_PAD_CTRL),
+	MX6_PAD_SD3_DAT7__SD3_DATA7 | MUX_PAD_CTRL(USDHC_EMMC_PAD_CTRL),
 	MX6_PAD_SD3_RST__SD3_RESET  | MUX_PAD_CTRL(USDHC_PAD_CTRL),
 };
 
@@ -166,7 +177,7 @@ static void setup_iomux_enet(void)
 	imx_iomux_v3_setup_multiple_pads(enet_pads, ARRAY_SIZE(enet_pads));
 }
 
-/* mux auxiliary pins to GPIO, so they can be used from the U-Boot commandline */
+/* mux auxiliary pins to GPIO, so they can be used from the U-Boot cmdline */
 iomux_v3_cfg_t const gpio_pads[] = {
 	/* ADDRESS[17:18] [25] used as GPIO */
 	MX6_PAD_KEY_ROW2__GPIO4_IO11	| MUX_PAD_CTRL(WEAK_PULLUP),
@@ -224,7 +235,7 @@ iomux_v3_cfg_t const gpio_pads[] = {
 	MX6_PAD_EIM_D27__GPIO3_IO27	| MUX_PAD_CTRL(WEAK_PULLUP),
 	MX6_PAD_NANDF_D6__GPIO2_IO06	| MUX_PAD_CTRL(WEAK_PULLUP),
 	MX6_PAD_NANDF_D3__GPIO2_IO03	| MUX_PAD_CTRL(WEAK_PULLUP),
-	MX6_PAD_ENET_REF_CLK__GPIO1_IO23| MUX_PAD_CTRL(WEAK_PULLUP),
+	MX6_PAD_ENET_REF_CLK__GPIO1_IO23 | MUX_PAD_CTRL(WEAK_PULLUP),
 	MX6_PAD_DI0_PIN4__GPIO4_IO20	| MUX_PAD_CTRL(WEAK_PULLUP),
 	MX6_PAD_SD4_DAT3__GPIO2_IO11	| MUX_PAD_CTRL(WEAK_PULLUP),
 	MX6_PAD_NANDF_D4__GPIO2_IO04	| MUX_PAD_CTRL(WEAK_PULLUP),
@@ -245,21 +256,18 @@ static void setup_iomux_gpio(void)
 }
 
 iomux_v3_cfg_t const usb_pads[] = {
-	/* TODO This pin has a dedicated USB power functionality, can we use it? */
 	/* USB_PE */
 	MX6_PAD_EIM_D31__GPIO3_IO31 | MUX_PAD_CTRL(NO_PAD_CTRL),
 #	define GPIO_USBH_EN IMX_GPIO_NR(3, 31)
-#if 0
-/* FIXME USB CLIENT */
-	/* USB_C_DET */
-	MX6_PAD_ENET_RX_ER__USB_OTG_ID	| MUX_PAD_CTRL(WEAK_PULLUP),
-#endif
 };
 
 /*
  * UARTs are used in DTE mode, switch the mode on all UARTs before
  * any pinmuxing connects a (DCE) output to a transceiver output.
  */
+#define UCR3		0x88	/* FIFO Control Register */
+#define UCR3_RI		(1<<8)	/* RIDELT DTE mode */
+#define UCR3_DCD	(1<<9)	/* DCDDELT DTE mode */
 #define UFCR		0x90	/* FIFO Control Register */
 #define UFCR_DCEDTE	(1<<6)	/* DCE=0 */
 
@@ -268,6 +276,10 @@ static void setup_dtemode_uart(void)
 	setbits_le32((u32 *)(UART1_BASE + UFCR), UFCR_DCEDTE);
 	setbits_le32((u32 *)(UART2_BASE + UFCR), UFCR_DCEDTE);
 	setbits_le32((u32 *)(UART3_BASE + UFCR), UFCR_DCEDTE);
+
+	clrbits_le32((u32 *)(UART1_BASE + UCR3), UCR3_DCD | UCR3_RI);
+	clrbits_le32((u32 *)(UART2_BASE + UCR3), UCR3_DCD | UCR3_RI);
+	clrbits_le32((u32 *)(UART3_BASE + UCR3), UCR3_DCD | UCR3_RI);
 }
 
 static void setup_iomux_uart(void)
@@ -288,7 +300,8 @@ int board_ehci_power(int port, int on)
 	switch (port) {
 	case 0:
 		/* control OTG power */
-		/* No special PE for USBC, always on when ID pin signals host mode */
+		/* No special PE for USBC, always on when ID pin signals
+		   host mode */
 		break;
 	case 1:
 		/* Control MXM USBH */
@@ -300,6 +313,21 @@ int board_ehci_power(int port, int on)
 		break;
 	}
 	return 0;
+}
+
+int board_usb_phy_mode(int port)
+{
+	switch (port) {
+	case 0:
+		if (gpio_get_value(IMX_GPIO_NR(7, 12)))
+			return USB_INIT_DEVICE;
+		else
+			return USB_INIT_HOST;
+	case 1:
+	default:
+		return USB_INIT_HOST;
+	}
+	return USB_INIT_HOST;
 }
 #endif
 
@@ -327,6 +355,7 @@ int board_mmc_getcd(struct mmc *mmc)
 
 int board_mmc_init(bd_t *bis)
 {
+#ifndef CONFIG_SPL_BUILD
 	s32 status = 0;
 	u32 index = 0;
 
@@ -347,9 +376,8 @@ int board_mmc_init(bd_t *bis)
 				usdhc1_pads, ARRAY_SIZE(usdhc1_pads));
 			break;
 		default:
-			printf("Warning: you configured more USDHC controllers"
-				"(%d) then supported by the board (%d)\n",
-				index + 1, CONFIG_SYS_FSL_USDHC_NUM);
+			printf("Warning: you configured more USDHC controllers (%d) then supported by the board (%d)\n",
+			       index + 1, CONFIG_SYS_FSL_USDHC_NUM);
 			return status;
 		}
 
@@ -357,6 +385,39 @@ int board_mmc_init(bd_t *bis)
 	}
 
 	return status;
+#else
+	struct src *psrc = (struct src *)SRC_BASE_ADDR;
+	unsigned reg = readl(&psrc->sbmr1) >> 11;
+	/*
+	 * Upon reading BOOT_CFG register the following map is done:
+	 * Bit 11 and 12 of BOOT_CFG register can determine the current
+	 * mmc port
+	 * 0x1                  SD1
+	 * 0x2                  SD2
+	 * 0x3                  SD4
+	 */
+
+	switch (reg & 0x3) {
+	case 0x0:
+		imx_iomux_v3_setup_multiple_pads(
+			usdhc1_pads, ARRAY_SIZE(usdhc1_pads));
+		usdhc_cfg[0].esdhc_base = USDHC1_BASE_ADDR;
+		usdhc_cfg[0].sdhc_clk = mxc_get_clock(MXC_ESDHC_CLK);
+		gd->arch.sdhc_clk = usdhc_cfg[0].sdhc_clk;
+		break;
+	case 0x2:
+		imx_iomux_v3_setup_multiple_pads(
+			usdhc3_pads, ARRAY_SIZE(usdhc3_pads));
+		usdhc_cfg[0].esdhc_base = USDHC3_BASE_ADDR;
+		usdhc_cfg[0].sdhc_clk = mxc_get_clock(MXC_ESDHC3_CLK);
+		gd->arch.sdhc_clk = usdhc_cfg[0].sdhc_clk;
+		break;
+	default:
+		puts("MMC boot device not available");
+	}
+
+	return fsl_esdhc_initialize(bis, &usdhc_cfg[0]);
+#endif
 }
 #endif
 
@@ -398,7 +459,7 @@ int board_eth_init(bd_t *bis)
 	}
 	phy_reset(phydev);
 	printf("using PHY at %d\n", phydev->addr);
-	ret  = fec_probe(bis, -1, base, bus, phydev);
+	ret = fec_probe(bis, -1, base, bus, phydev);
 	if (ret) {
 		printf("FEC MXC: %s:failed\n", __func__);
 		free(phydev);
@@ -422,35 +483,35 @@ static iomux_v3_cfg_t const backlight_pads[] = {
 	/* Backlight On */
 	MX6_PAD_EIM_D26__GPIO3_IO26 | MUX_PAD_CTRL(NO_PAD_CTRL),
 #define RGB_BACKLIGHT_GP IMX_GPIO_NR(3, 26)
-/* TODO PWM not GPIO */
+	/* Backlight PWM, used as GPIO in U-Boot */
 	MX6_PAD_EIM_A22__GPIO2_IO16  | MUX_PAD_CTRL(NO_PULLUP),
 	MX6_PAD_SD4_DAT1__GPIO2_IO09 | MUX_PAD_CTRL(NO_PAD_CTRL),
 #define RGB_BACKLIGHTPWM_GP IMX_GPIO_NR(2, 9)
 };
 
 static iomux_v3_cfg_t const rgb_pads[] = {
-		MX6_PAD_DI0_DISP_CLK__IPU1_DI0_DISP_CLK | MUX_PAD_CTRL(OUTPUT_RGB),
-		MX6_PAD_DI0_PIN15__IPU1_DI0_PIN15 | MUX_PAD_CTRL(OUTPUT_RGB),
-		MX6_PAD_DI0_PIN2__IPU1_DI0_PIN02 | MUX_PAD_CTRL(OUTPUT_RGB),
-		MX6_PAD_DI0_PIN3__IPU1_DI0_PIN03 | MUX_PAD_CTRL(OUTPUT_RGB),
-		MX6_PAD_DISP0_DAT0__IPU1_DISP0_DATA00 | MUX_PAD_CTRL(OUTPUT_RGB),
-		MX6_PAD_DISP0_DAT1__IPU1_DISP0_DATA01 | MUX_PAD_CTRL(OUTPUT_RGB),
-		MX6_PAD_DISP0_DAT2__IPU1_DISP0_DATA02 | MUX_PAD_CTRL(OUTPUT_RGB),
-		MX6_PAD_DISP0_DAT3__IPU1_DISP0_DATA03 | MUX_PAD_CTRL(OUTPUT_RGB),
-		MX6_PAD_DISP0_DAT4__IPU1_DISP0_DATA04 | MUX_PAD_CTRL(OUTPUT_RGB),
-		MX6_PAD_DISP0_DAT5__IPU1_DISP0_DATA05 | MUX_PAD_CTRL(OUTPUT_RGB),
-		MX6_PAD_DISP0_DAT6__IPU1_DISP0_DATA06 | MUX_PAD_CTRL(OUTPUT_RGB),
-		MX6_PAD_DISP0_DAT7__IPU1_DISP0_DATA07 | MUX_PAD_CTRL(OUTPUT_RGB),
-		MX6_PAD_DISP0_DAT8__IPU1_DISP0_DATA08 | MUX_PAD_CTRL(OUTPUT_RGB),
-		MX6_PAD_DISP0_DAT9__IPU1_DISP0_DATA09 | MUX_PAD_CTRL(OUTPUT_RGB),
-		MX6_PAD_DISP0_DAT10__IPU1_DISP0_DATA10 | MUX_PAD_CTRL(OUTPUT_RGB),
-		MX6_PAD_DISP0_DAT11__IPU1_DISP0_DATA11 | MUX_PAD_CTRL(OUTPUT_RGB),
-		MX6_PAD_DISP0_DAT12__IPU1_DISP0_DATA12 | MUX_PAD_CTRL(OUTPUT_RGB),
-		MX6_PAD_DISP0_DAT13__IPU1_DISP0_DATA13 | MUX_PAD_CTRL(OUTPUT_RGB),
-		MX6_PAD_DISP0_DAT14__IPU1_DISP0_DATA14 | MUX_PAD_CTRL(OUTPUT_RGB),
-		MX6_PAD_DISP0_DAT15__IPU1_DISP0_DATA15 | MUX_PAD_CTRL(OUTPUT_RGB),
-		MX6_PAD_DISP0_DAT16__IPU1_DISP0_DATA16 | MUX_PAD_CTRL(OUTPUT_RGB),
-		MX6_PAD_DISP0_DAT17__IPU1_DISP0_DATA17 | MUX_PAD_CTRL(OUTPUT_RGB),
+	MX6_PAD_DI0_DISP_CLK__IPU1_DI0_DISP_CLK | MUX_PAD_CTRL(OUTPUT_RGB),
+	MX6_PAD_DI0_PIN15__IPU1_DI0_PIN15 | MUX_PAD_CTRL(OUTPUT_RGB),
+	MX6_PAD_DI0_PIN2__IPU1_DI0_PIN02 | MUX_PAD_CTRL(OUTPUT_RGB),
+	MX6_PAD_DI0_PIN3__IPU1_DI0_PIN03 | MUX_PAD_CTRL(OUTPUT_RGB),
+	MX6_PAD_DISP0_DAT0__IPU1_DISP0_DATA00 | MUX_PAD_CTRL(OUTPUT_RGB),
+	MX6_PAD_DISP0_DAT1__IPU1_DISP0_DATA01 | MUX_PAD_CTRL(OUTPUT_RGB),
+	MX6_PAD_DISP0_DAT2__IPU1_DISP0_DATA02 | MUX_PAD_CTRL(OUTPUT_RGB),
+	MX6_PAD_DISP0_DAT3__IPU1_DISP0_DATA03 | MUX_PAD_CTRL(OUTPUT_RGB),
+	MX6_PAD_DISP0_DAT4__IPU1_DISP0_DATA04 | MUX_PAD_CTRL(OUTPUT_RGB),
+	MX6_PAD_DISP0_DAT5__IPU1_DISP0_DATA05 | MUX_PAD_CTRL(OUTPUT_RGB),
+	MX6_PAD_DISP0_DAT6__IPU1_DISP0_DATA06 | MUX_PAD_CTRL(OUTPUT_RGB),
+	MX6_PAD_DISP0_DAT7__IPU1_DISP0_DATA07 | MUX_PAD_CTRL(OUTPUT_RGB),
+	MX6_PAD_DISP0_DAT8__IPU1_DISP0_DATA08 | MUX_PAD_CTRL(OUTPUT_RGB),
+	MX6_PAD_DISP0_DAT9__IPU1_DISP0_DATA09 | MUX_PAD_CTRL(OUTPUT_RGB),
+	MX6_PAD_DISP0_DAT10__IPU1_DISP0_DATA10 | MUX_PAD_CTRL(OUTPUT_RGB),
+	MX6_PAD_DISP0_DAT11__IPU1_DISP0_DATA11 | MUX_PAD_CTRL(OUTPUT_RGB),
+	MX6_PAD_DISP0_DAT12__IPU1_DISP0_DATA12 | MUX_PAD_CTRL(OUTPUT_RGB),
+	MX6_PAD_DISP0_DAT13__IPU1_DISP0_DATA13 | MUX_PAD_CTRL(OUTPUT_RGB),
+	MX6_PAD_DISP0_DAT14__IPU1_DISP0_DATA14 | MUX_PAD_CTRL(OUTPUT_RGB),
+	MX6_PAD_DISP0_DAT15__IPU1_DISP0_DATA15 | MUX_PAD_CTRL(OUTPUT_RGB),
+	MX6_PAD_DISP0_DAT16__IPU1_DISP0_DATA16 | MUX_PAD_CTRL(OUTPUT_RGB),
+	MX6_PAD_DISP0_DAT17__IPU1_DISP0_DATA17 | MUX_PAD_CTRL(OUTPUT_RGB),
 };
 
 static void do_enable_hdmi(struct display_info_t const *dev)
@@ -463,8 +524,6 @@ static void enable_rgb(struct display_info_t const *dev)
 	imx_iomux_v3_setup_multiple_pads(
 		rgb_pads,
 		ARRAY_SIZE(rgb_pads));
-	gpio_direction_output(RGB_BACKLIGHT_GP, 1);
-	gpio_direction_output(RGB_BACKLIGHTPWM_GP, 0);
 }
 
 static int detect_default(struct display_info_t const *dev)
@@ -543,10 +602,9 @@ static void setup_display(void)
 
 	enable_ipu_clock();
 	imx_setup_hdmi();
-/* FIXME disable whatever LVDS stuff is initialized here */
 	/* Turn on LDB0,IPU,IPU DI0 clocks */
 	reg = __raw_readl(&mxc_ccm->CCGR3);
-	reg |=  MXC_CCM_CCGR3_LDB_DI0_MASK;
+	reg |= MXC_CCM_CCGR3_LDB_DI0_MASK;
 	writel(reg, &mxc_ccm->CCGR3);
 
 	/* set LDB0, LDB1 clk select to 011/011 */
@@ -591,12 +649,21 @@ static void setup_display(void)
 	gpio_direction_output(RGB_BACKLIGHTPWM_GP, 0);
 	gpio_direction_output(RGB_BACKLIGHT_GP, 1);
 }
+
+/*
+ * Backlight off before OS handover
+ */
+void board_preboot_os(void)
+{
+	gpio_direction_output(RGB_BACKLIGHTPWM_GP, 1);
+	gpio_direction_output(RGB_BACKLIGHT_GP, 0);
+}
 #endif /* defined(CONFIG_VIDEO_IPUV3) */
 
 int board_early_init_f(void)
 {
 	imx_iomux_v3_setup_multiple_pads(pwr_intb_pads,
-					ARRAY_SIZE(pwr_intb_pads));
+					 ARRAY_SIZE(pwr_intb_pads));
 	setup_iomux_uart();
 
 #if defined(CONFIG_VIDEO_IPUV3)
@@ -622,12 +689,8 @@ int board_init(void)
 	setup_i2c(2, CONFIG_SYS_I2C_SPEED, 0x7f, &i2c_pad_info1);
 	setup_i2c(1, CONFIG_SYS_I2C_SPEED, 0x7f, &i2c_pad_info_loc);
 
-#ifdef CONFIG_TRDX_CMD_IMX_MFGR
+#ifdef CONFIG_TDX_CMD_IMX_MFGR
 	(void) pmic_init();
-#endif
-
-#ifdef CONFIG_CMD_SATA
-	setup_sata();
 #endif
 
 	setup_iomux_gpio();
@@ -638,25 +701,71 @@ int board_init(void)
 #ifdef CONFIG_BOARD_LATE_INIT
 int board_late_init(void)
 {
+#if defined(CONFIG_REVISION_TAG) && \
+    defined(CONFIG_ENV_VARS_UBOOT_RUNTIME_CONFIG)
 	char env_str[256];
 	u32 rev;
 
-#if defined(CONFIG_REVISION_TAG) && defined(CONFIG_ENV_VARS_UBOOT_RUNTIME_CONFIG)
 	rev = get_board_rev();
 	snprintf(env_str, ARRAY_SIZE(env_str), "%.4x", rev);
 	setenv("board_rev", env_str);
 #endif
 
+#ifdef CONFIG_CMD_USB_SDP
+	if (is_boot_from_usb()) {
+		printf("Serial Downloader recovery mode, using sdp command\n");
+		setenv("bootdelay", "0");
+		setenv("bootcmd", "sdp 0");
+	}
+#endif /* CONFIG_CMD_USB_SDP */
+
 	return 0;
 }
 #endif /* CONFIG_BOARD_LATE_INIT */
 
-int checkboard_fallback(void)
+#if defined(CONFIG_OF_LIBFDT) && defined(CONFIG_OF_SYSTEM_SETUP)
+int ft_system_setup(void *blob, bd_t *bd)
 {
-	printf("Model: Toradex Colibri iMX6 %sMB\n",
-		(gd->ram_size == 0x20000000) ? "512" : "256");
 	return 0;
 }
+#endif
+
+int checkboard(void)
+{
+	char it[] = " IT";
+	int minc, maxc;
+
+	switch (get_cpu_temp_grade(&minc, &maxc)) {
+	case TEMP_AUTOMOTIVE:
+	case TEMP_INDUSTRIAL:
+		break;
+	case TEMP_EXTCOMMERCIAL:
+	default:
+		it[0] = 0;
+	};
+	printf("Model: Toradex Colibri iMX6 %s %sMB%s\n",
+	       is_cpu_type(MXC_CPU_MX6DL) ? "DualLite" : "Solo",
+	       (gd->ram_size == 0x20000000) ? "512" : "256", it);
+	return 0;
+}
+
+#if defined(CONFIG_OF_LIBFDT) && defined(CONFIG_OF_BOARD_SETUP)
+int ft_board_setup(void *blob, bd_t *bd)
+{
+	u32 cma_size;
+
+	ft_common_board_setup(blob, bd);
+
+	cma_size = getenv_ulong("cma-size", 10, 320 * 1024 * 1024);
+	cma_size = min((u32)(gd->ram_size >> 1), cma_size);
+
+	fdt_setprop_u32(blob,
+			fdt_path_offset (blob, "/reserved-memory/linux,cma"),
+			"size",
+			cma_size);
+	return 0;
+}
+#endif
 
 #ifdef CONFIG_CMD_BMODE
 static const struct boot_mode board_boot_modes[] = {
@@ -673,51 +782,6 @@ int misc_init_r(void)
 	return 0;
 }
 
-/*
- * On Colibri iMX6 the DDR bus width depends on the CPU type
- * With Solo it is 32-bit, with DualLite 64-bit.
- * U-Boot is configured to use 32-bit on both models which works.
- * This commands patches this so that on subsequent boots a DL
- * will use 64-bit and thus all stuffed memory.
- */
-int do_patch_ddr_size(cmd_tbl_t *cmdtp, int flag, int argc,
-		char * const argv[])
-{
-	char *ivt;
-	struct mmc *mmc;
-	int ret = 0;
-
-	ivt = memalign(ARCH_DMA_MINALIGN, 1024);
-	if (ivt != NULL) {
-		/* read IVT */
-		mmc = find_mmc_device(0);
-		/* Switch to primary eMMC boot area partition */
-		mmc_switch_part(0, 1);
-		ret = mmc->block_dev.block_read(0, 2, 2, ivt);
-		/* FIXME: Parse IVT to find DCD, parse DCD to find correct write addr */
-		if(ret == 2) {
-			if(is_cpu_type(MXC_CPU_MX6DL) && (ivt[0x215] == 0x19)) {
-				ivt[0x215] = 0x1a;
-				ret = mmc->block_dev.block_write(0, 2, 2, ivt);
-				puts("patched, ");
-			}
-		}
-		/* Switch back to regular eMMC user partition */
-		mmc_switch_part(0, 0);
-	}
-	if(ret == 2)
-		puts("done.\n");
-	else
-		puts("failed.\n");
-	return CMD_RET_SUCCESS;
-}
-
-U_BOOT_CMD(
-	patch_ddr_size, 1, 0, do_patch_ddr_size,
-	"Patch the DCD table to the right ddr size depending on CPU type\n",
-	""
-);
-
 #ifdef CONFIG_LDO_BYPASS_CHECK
 /* TODO, use external pmic, for now always ldo_enable */
 void ldo_mode_set(int ldo_bypass)
@@ -725,3 +789,449 @@ void ldo_mode_set(int ldo_bypass)
 	return;
 }
 #endif
+
+#ifdef CONFIG_SPL_BUILD
+#include <spl.h>
+#include <libfdt.h>
+#include "asm/arch/mx6dl-ddr.h"
+#include "asm/arch/iomux.h"
+#include "asm/arch/crm_regs.h"
+
+static int mx6s_dcd_table[] = {
+/* ddr-setup.cfg */
+
+MX6_IOM_DRAM_SDQS0, 0x00000030,
+MX6_IOM_DRAM_SDQS1, 0x00000030,
+MX6_IOM_DRAM_SDQS2, 0x00000030,
+MX6_IOM_DRAM_SDQS3, 0x00000030,
+MX6_IOM_DRAM_SDQS4, 0x00000030,
+MX6_IOM_DRAM_SDQS5, 0x00000030,
+MX6_IOM_DRAM_SDQS6, 0x00000030,
+MX6_IOM_DRAM_SDQS7, 0x00000030,
+
+MX6_IOM_GRP_B0DS, 0x00000030,
+MX6_IOM_GRP_B1DS, 0x00000030,
+MX6_IOM_GRP_B2DS, 0x00000030,
+MX6_IOM_GRP_B3DS, 0x00000030,
+MX6_IOM_GRP_B4DS, 0x00000030,
+MX6_IOM_GRP_B5DS, 0x00000030,
+MX6_IOM_GRP_B6DS, 0x00000030,
+MX6_IOM_GRP_B7DS, 0x00000030,
+MX6_IOM_GRP_ADDDS, 0x00000030,
+/* 40 Ohm drive strength for cs0/1,sdba2,cke0/1,sdwe */
+MX6_IOM_GRP_CTLDS, 0x00000030,
+
+MX6_IOM_DRAM_DQM0, 0x00020030,
+MX6_IOM_DRAM_DQM1, 0x00020030,
+MX6_IOM_DRAM_DQM2, 0x00020030,
+MX6_IOM_DRAM_DQM3, 0x00020030,
+MX6_IOM_DRAM_DQM4, 0x00020030,
+MX6_IOM_DRAM_DQM5, 0x00020030,
+MX6_IOM_DRAM_DQM6, 0x00020030,
+MX6_IOM_DRAM_DQM7, 0x00020030,
+
+MX6_IOM_DRAM_CAS, 0x00020030,
+MX6_IOM_DRAM_RAS, 0x00020030,
+MX6_IOM_DRAM_SDCLK_0, 0x00020030,
+MX6_IOM_DRAM_SDCLK_1, 0x00020030,
+
+MX6_IOM_DRAM_RESET, 0x00020030,
+MX6_IOM_DRAM_SDCKE0, 0x00003000,
+MX6_IOM_DRAM_SDCKE1, 0x00003000,
+
+MX6_IOM_DRAM_SDODT0, 0x00003030,
+MX6_IOM_DRAM_SDODT1, 0x00003030,
+
+/* (differential input) */
+MX6_IOM_DDRMODE_CTL, 0x00020000,
+/* (differential input) */
+MX6_IOM_GRP_DDRMODE, 0x00020000,
+/* disable ddr pullups */
+MX6_IOM_GRP_DDRPKE, 0x00000000,
+MX6_IOM_DRAM_SDBA2, 0x00000000,
+/* 40 Ohm drive strength for cs0/1,sdba2,cke0/1,sdwe */
+MX6_IOM_GRP_DDR_TYPE, 0x000C0000,
+
+/* Read data DQ Byte0-3 delay */
+MX6_MMDC_P0_MPRDDQBY0DL, 0x33333333,
+MX6_MMDC_P0_MPRDDQBY1DL, 0x33333333,
+MX6_MMDC_P0_MPRDDQBY2DL, 0x33333333,
+MX6_MMDC_P0_MPRDDQBY3DL, 0x33333333,
+MX6_MMDC_P1_MPRDDQBY0DL, 0x33333333,
+MX6_MMDC_P1_MPRDDQBY1DL, 0x33333333,
+MX6_MMDC_P1_MPRDDQBY2DL, 0x33333333,
+MX6_MMDC_P1_MPRDDQBY3DL, 0x33333333,
+
+/*
+ * MDMISC	mirroring	interleaved (row/bank/col)
+ */
+/* TODO: check what the RALAT field does */
+MX6_MMDC_P0_MDMISC, 0x00081740,
+
+/*
+ * MDSCR	con_req
+ */
+MX6_MMDC_P0_MDSCR, 0x00008000,
+
+
+/* 800mhz_2x64mx16.cfg */
+
+MX6_MMDC_P0_MDPDC, 0x0002002D,
+MX6_MMDC_P0_MDCFG0, 0x2C305503,
+MX6_MMDC_P0_MDCFG1, 0xB66D8D63,
+MX6_MMDC_P0_MDCFG2, 0x01FF00DB,
+MX6_MMDC_P0_MDRWD, 0x000026D2,
+MX6_MMDC_P0_MDOR, 0x00301023,
+MX6_MMDC_P0_MDOTC, 0x00333030,
+MX6_MMDC_P0_MDPDC, 0x0002556D,
+/* CS0 End: 7MSB of ((0x10000000, + 512M) -1) >> 25 */
+MX6_MMDC_P0_MDASP, 0x00000017,
+/* DDR3 DATA BUS SIZE: 64BIT */
+/* MX6_MMDC_P0_MDCTL, 0x821A0000, */
+/* DDR3 DATA BUS SIZE: 32BIT */
+MX6_MMDC_P0_MDCTL, 0x82190000,
+
+/* Write commands to DDR */
+/* Load Mode Registers */
+/* TODO Use Auto Self-Refresh mode (Extended Temperature)*/
+/* MX6_MMDC_P0_MDSCR, 0x04408032, */
+MX6_MMDC_P0_MDSCR, 0x04008032,
+MX6_MMDC_P0_MDSCR, 0x00008033,
+MX6_MMDC_P0_MDSCR, 0x00048031,
+MX6_MMDC_P0_MDSCR, 0x13208030,
+/* ZQ calibration */
+MX6_MMDC_P0_MDSCR, 0x04008040,
+
+MX6_MMDC_P0_MPZQHWCTRL, 0xA1390003,
+MX6_MMDC_P1_MPZQHWCTRL, 0xA1390003,
+MX6_MMDC_P0_MDREF, 0x00005800,
+
+MX6_MMDC_P0_MPODTCTRL, 0x00000000,
+MX6_MMDC_P1_MPODTCTRL, 0x00000000,
+
+MX6_MMDC_P0_MPDGCTRL0, 0x42360232,
+MX6_MMDC_P0_MPDGCTRL1, 0x021F022A,
+MX6_MMDC_P1_MPDGCTRL0, 0x421E0224,
+MX6_MMDC_P1_MPDGCTRL1, 0x02110218,
+
+MX6_MMDC_P0_MPRDDLCTL, 0x41434344,
+MX6_MMDC_P1_MPRDDLCTL, 0x4345423E,
+MX6_MMDC_P0_MPWRDLCTL, 0x39383339,
+MX6_MMDC_P1_MPWRDLCTL, 0x3E363930,
+
+MX6_MMDC_P0_MPWLDECTRL0, 0x00340039,
+MX6_MMDC_P0_MPWLDECTRL1, 0x002C002D,
+MX6_MMDC_P1_MPWLDECTRL0, 0x00120019,
+MX6_MMDC_P1_MPWLDECTRL1, 0x0012002D,
+
+MX6_MMDC_P0_MPMUR0, 0x00000800,
+MX6_MMDC_P1_MPMUR0, 0x00000800,
+MX6_MMDC_P0_MDSCR, 0x00000000,
+MX6_MMDC_P0_MAPSR, 0x00011006,
+};
+
+static int mx6dl_dcd_table[] = {
+/* ddr-setup.cfg */
+
+MX6_IOM_DRAM_SDQS0, 0x00000030,
+MX6_IOM_DRAM_SDQS1, 0x00000030,
+MX6_IOM_DRAM_SDQS2, 0x00000030,
+MX6_IOM_DRAM_SDQS3, 0x00000030,
+MX6_IOM_DRAM_SDQS4, 0x00000030,
+MX6_IOM_DRAM_SDQS5, 0x00000030,
+MX6_IOM_DRAM_SDQS6, 0x00000030,
+MX6_IOM_DRAM_SDQS7, 0x00000030,
+
+MX6_IOM_GRP_B0DS, 0x00000030,
+MX6_IOM_GRP_B1DS, 0x00000030,
+MX6_IOM_GRP_B2DS, 0x00000030,
+MX6_IOM_GRP_B3DS, 0x00000030,
+MX6_IOM_GRP_B4DS, 0x00000030,
+MX6_IOM_GRP_B5DS, 0x00000030,
+MX6_IOM_GRP_B6DS, 0x00000030,
+MX6_IOM_GRP_B7DS, 0x00000030,
+MX6_IOM_GRP_ADDDS, 0x00000030,
+/* 40 Ohm drive strength for cs0/1,sdba2,cke0/1,sdwe */
+MX6_IOM_GRP_CTLDS, 0x00000030,
+
+MX6_IOM_DRAM_DQM0, 0x00020030,
+MX6_IOM_DRAM_DQM1, 0x00020030,
+MX6_IOM_DRAM_DQM2, 0x00020030,
+MX6_IOM_DRAM_DQM3, 0x00020030,
+MX6_IOM_DRAM_DQM4, 0x00020030,
+MX6_IOM_DRAM_DQM5, 0x00020030,
+MX6_IOM_DRAM_DQM6, 0x00020030,
+MX6_IOM_DRAM_DQM7, 0x00020030,
+
+MX6_IOM_DRAM_CAS, 0x00020030,
+MX6_IOM_DRAM_RAS, 0x00020030,
+MX6_IOM_DRAM_SDCLK_0, 0x00020030,
+MX6_IOM_DRAM_SDCLK_1, 0x00020030,
+
+MX6_IOM_DRAM_RESET, 0x00020030,
+MX6_IOM_DRAM_SDCKE0, 0x00003000,
+MX6_IOM_DRAM_SDCKE1, 0x00003000,
+
+MX6_IOM_DRAM_SDODT0, 0x00003030,
+MX6_IOM_DRAM_SDODT1, 0x00003030,
+
+/* (differential input) */
+MX6_IOM_DDRMODE_CTL, 0x00020000,
+/* (differential input) */
+MX6_IOM_GRP_DDRMODE, 0x00020000,
+/* disable ddr pullups */
+MX6_IOM_GRP_DDRPKE, 0x00000000,
+MX6_IOM_DRAM_SDBA2, 0x00000000,
+/* 40 Ohm drive strength for cs0/1,sdba2,cke0/1,sdwe */
+MX6_IOM_GRP_DDR_TYPE, 0x000C0000,
+
+/* Read data DQ Byte0-3 delay */
+MX6_MMDC_P0_MPRDDQBY0DL, 0x33333333,
+MX6_MMDC_P0_MPRDDQBY1DL, 0x33333333,
+MX6_MMDC_P0_MPRDDQBY2DL, 0x33333333,
+MX6_MMDC_P0_MPRDDQBY3DL, 0x33333333,
+MX6_MMDC_P1_MPRDDQBY0DL, 0x33333333,
+MX6_MMDC_P1_MPRDDQBY1DL, 0x33333333,
+MX6_MMDC_P1_MPRDDQBY2DL, 0x33333333,
+MX6_MMDC_P1_MPRDDQBY3DL, 0x33333333,
+
+/*
+ * MDMISC	mirroring	interleaved (row/bank/col)
+ */
+/* TODO: check what the RALAT field does */
+MX6_MMDC_P0_MDMISC, 0x00081740,
+
+/*
+ * MDSCR	con_req
+ */
+MX6_MMDC_P0_MDSCR, 0x00008000,
+
+
+/* 800mhz_2x64mx16.cfg */
+
+MX6_MMDC_P0_MDPDC, 0x0002002D,
+MX6_MMDC_P0_MDCFG0, 0x2C305503,
+MX6_MMDC_P0_MDCFG1, 0xB66D8D63,
+MX6_MMDC_P0_MDCFG2, 0x01FF00DB,
+MX6_MMDC_P0_MDRWD, 0x000026D2,
+MX6_MMDC_P0_MDOR, 0x00301023,
+MX6_MMDC_P0_MDOTC, 0x00333030,
+MX6_MMDC_P0_MDPDC, 0x0002556D,
+/* CS0 End: 7MSB of ((0x10000000, + 512M) -1) >> 25 */
+MX6_MMDC_P0_MDASP, 0x00000017,
+/* DDR3 DATA BUS SIZE: 64BIT */
+MX6_MMDC_P0_MDCTL, 0x821A0000,
+/* DDR3 DATA BUS SIZE: 32BIT */
+/* MX6_MMDC_P0_MDCTL, 0x82190000, */
+
+/* Write commands to DDR */
+/* Load Mode Registers */
+/* TODO Use Auto Self-Refresh mode (Extended Temperature)*/
+/* MX6_MMDC_P0_MDSCR, 0x04408032, */
+MX6_MMDC_P0_MDSCR, 0x04008032,
+MX6_MMDC_P0_MDSCR, 0x00008033,
+MX6_MMDC_P0_MDSCR, 0x00048031,
+MX6_MMDC_P0_MDSCR, 0x13208030,
+/* ZQ calibration */
+MX6_MMDC_P0_MDSCR, 0x04008040,
+
+MX6_MMDC_P0_MPZQHWCTRL, 0xA1390003,
+MX6_MMDC_P1_MPZQHWCTRL, 0xA1390003,
+MX6_MMDC_P0_MDREF, 0x00005800,
+
+MX6_MMDC_P0_MPODTCTRL, 0x00000000,
+MX6_MMDC_P1_MPODTCTRL, 0x00000000,
+
+MX6_MMDC_P0_MPDGCTRL0, 0x42360232,
+MX6_MMDC_P0_MPDGCTRL1, 0x021F022A,
+MX6_MMDC_P1_MPDGCTRL0, 0x421E0224,
+MX6_MMDC_P1_MPDGCTRL1, 0x02110218,
+
+MX6_MMDC_P0_MPRDDLCTL, 0x41434344,
+MX6_MMDC_P1_MPRDDLCTL, 0x4345423E,
+MX6_MMDC_P0_MPWRDLCTL, 0x39383339,
+MX6_MMDC_P1_MPWRDLCTL, 0x3E363930,
+
+MX6_MMDC_P0_MPWLDECTRL0, 0x00340039,
+MX6_MMDC_P0_MPWLDECTRL1, 0x002C002D,
+MX6_MMDC_P1_MPWLDECTRL0, 0x00120019,
+MX6_MMDC_P1_MPWLDECTRL1, 0x0012002D,
+
+MX6_MMDC_P0_MPMUR0, 0x00000800,
+MX6_MMDC_P1_MPMUR0, 0x00000800,
+MX6_MMDC_P0_MDSCR, 0x00000000,
+MX6_MMDC_P0_MAPSR, 0x00011006,
+};
+
+static void ccgr_init(void)
+{
+	struct mxc_ccm_reg *ccm = (struct mxc_ccm_reg *)CCM_BASE_ADDR;
+
+	writel(0x00C03F3F, &ccm->CCGR0);
+	writel(0x0030FC03, &ccm->CCGR1);
+	writel(0x0FFFFFF3, &ccm->CCGR2);
+	writel(0x3FF0300F, &ccm->CCGR3);
+	writel(0x00FFF300, &ccm->CCGR4);
+	writel(0x0F0000F3, &ccm->CCGR5);
+	writel(0x000003FF, &ccm->CCGR6);
+
+/*
+ * Setup CCM_CCOSR register as follows:
+ *
+ * cko1_en  = 1	   --> CKO1 enabled
+ * cko1_div = 111  --> divide by 8
+ * cko1_sel = 1011 --> ahb_clk_root
+ *
+ * This sets CKO1 at ahb_clk_root/8 = 132/8 = 16.5 MHz
+ */
+	writel(0x000000FB, &ccm->ccosr);
+}
+
+static void gpr_init(void)
+{
+	struct iomuxc *iomux = (struct iomuxc *)IOMUXC_BASE_ADDR;
+
+	/* enable AXI cache for VDOA/VPU/IPU */
+	writel(0xF00000CF, &iomux->gpr[4]);
+	/* set IPU AXI-id0 Qos=0xf(bypass) AXI-id1 Qos=0x7 */
+	writel(0x007F007F, &iomux->gpr[6]);
+	writel(0x007F007F, &iomux->gpr[7]);
+}
+
+static void ddr_init(int *table, int size)
+{
+	int i;
+
+	for (i = 0; i < size / 2 ; i++)
+		writel(table[2 * i + 1], table[2 * i]);
+}
+
+static 	struct mx6_ddr_sysinfo ddr_sysinfo = {
+	.dsize          = 2,
+};
+
+static void spl_dram_init(void)
+{
+	int minc, maxc;
+
+	switch (get_cpu_temp_grade(&minc, &maxc)) {
+	case TEMP_COMMERCIAL:
+	case TEMP_EXTCOMMERCIAL:
+		if (is_cpu_type(MXC_CPU_MX6DL)) {
+#ifndef CONFIG_SPL_SILENT_CONSOLE
+			puts("Commercial temperature grade DDR3 timings, 64bit bus width.\n");
+#endif
+			ddr_init(mx6dl_dcd_table, ARRAY_SIZE(mx6dl_dcd_table));
+		} else {
+#ifndef CONFIG_SPL_SILENT_CONSOLE
+			puts("Commercial temperature grade DDR3 timings, 32bit bus width.\n");
+#endif
+			ddr_sysinfo.dsize = 1;
+			ddr_init(mx6s_dcd_table, ARRAY_SIZE(mx6s_dcd_table));
+		}
+		break;
+	case TEMP_INDUSTRIAL:
+	case TEMP_AUTOMOTIVE:
+	default:
+		if (is_cpu_type(MXC_CPU_MX6DL)) {
+#ifndef CONFIG_SPL_SILENT_CONSOLE
+			puts("Industrial temperature grade DDR3 timings, 64bit bus width.\n");
+#endif
+			ddr_init(mx6dl_dcd_table, ARRAY_SIZE(mx6dl_dcd_table));
+		} else {
+#ifndef CONFIG_SPL_SILENT_CONSOLE
+			puts("Industrial temperature grade DDR3 timings, 32bit bus width.\n");
+#endif
+			ddr_sysinfo.dsize = 1;
+			ddr_init(mx6s_dcd_table, ARRAY_SIZE(mx6s_dcd_table));
+		}
+		break;
+	};
+	udelay(100);
+	/* Perform DDR DRAM calibration */
+	mmdc_do_write_level_calibration(&ddr_sysinfo);
+	mmdc_do_dqs_calibration(&ddr_sysinfo);
+}
+
+static iomux_v3_cfg_t const gpio_reset_pad[] = {
+	MX6_PAD_RGMII_RD1__GPIO6_IO27 | MUX_PAD_CTRL(NO_PAD_CTRL)
+#define GPIO_NRESET IMX_GPIO_NR(6, 27)
+};
+
+static void nreset_out(void) {
+
+	#define IMX_RESET_CAUSE_POR_MASK 0x00001
+	int reset_cause;
+
+	struct src *src_regs = (struct src *)SRC_BASE_ADDR;
+	reset_cause = readl(&src_regs->srsr);
+
+	if (!(reset_cause & IMX_RESET_CAUSE_POR_MASK)) {
+		imx_iomux_v3_setup_multiple_pads(gpio_reset_pad,
+					 ARRAY_SIZE(gpio_reset_pad));
+		gpio_direction_output(GPIO_NRESET, 1);
+		udelay(100);
+		gpio_direction_output(GPIO_NRESET, 0);
+	}
+}
+
+void board_init_f(ulong dummy)
+{
+	/* setup AIPS and disable watchdog */
+	arch_cpu_init();
+
+	ccgr_init();
+	gpr_init();
+
+	/* iomux and setup of i2c */
+	board_early_init_f();
+
+	/* setup GP timer */
+	timer_init();
+
+	/* UART clocks enabled and gd valid - init serial console */
+	preloader_console_init();
+
+	/* Make sure we use dte mode */
+	setup_dtemode_uart();
+
+	/* DDR initialization */
+	spl_dram_init();
+
+	/* Clear the BSS. */
+	memset(__bss_start, 0, __bss_end - __bss_start);
+
+	/* Assert nReset_Out */
+	nreset_out();
+
+	/* load/boot image from boot device */
+	board_init_r(NULL, 0);
+}
+
+void reset_cpu(ulong addr)
+{
+}
+
+#ifdef CONFIG_SPL_USB_GADGET_SUPPORT
+int g_dnl_bind_fixup(struct usb_device_descriptor *dev, const char *name)
+{
+	unsigned short usb_pid;
+
+	usb_pid = TORADEX_USB_PRODUCT_NUM_OFFSET + 0xfff;
+	put_unaligned(usb_pid, &dev->idProduct);
+
+	return 0;
+}
+#endif
+
+#endif
+
+static struct mxc_serial_platdata mxc_serial_plat = {
+	.reg = (struct mxc_uart *)UART1_BASE,
+	.use_dte = true,
+};
+
+U_BOOT_DEVICE(mxc_serial) = {
+	.name = "serial_mxc",
+	.platdata = &mxc_serial_plat,
+};

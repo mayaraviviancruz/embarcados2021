@@ -31,6 +31,10 @@ config PROC_FS
 config PROC_KCORE
 	bool "/proc/kcore support" if !ARM
 	depends on PROC_FS && MMU
+	help
+	  Provides a virtual ELF core file of the live kernel.  This can
+	  be read with gdb and other ELF tools.  No modifications can be
+	  made using this mechanism.
 
 config PROC_VMCORE
 	bool "/proc/vmcore support"
@@ -68,14 +72,12 @@ config PROC_PAGE_MONITOR
 	  /proc/kpagecount, and /proc/kpageflags. Disabling these
           interfaces will reduce the size of the kernel by approximately 4kb.
 
-config REPORT_PRESENT_CPUS
+config PROC_CHILDREN
+	bool "Include /proc/<pid>/task/<tid>/children file"
 	default n
-	depends on PROC_FS && SMP
-	bool "Report present cpus instead of online cpus"
 	help
-	  This is a work around to report Present CPUs instead of Online CPUs.
-	  Some power savings implements use CPU hotplug for power domains.
-	  It is a bug to enable this on a server or other architecture that
-	  uses cpu hotplug in the correct way.
+	  Provides a fast way to retrieve first level children pids of a task. See
+	  <file:Documentation/filesystems/proc.txt> for more information.
 
-
+	  Say Y if you are running any user-space software which takes benefit from
+	  this interface. For example, rkt is such a piece of software.

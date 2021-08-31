@@ -14,28 +14,44 @@
 		i2c0 = "/i2c@7000d000";
 		i2c1 = "/i2c@7000c000";
 		i2c2 = "/i2c@7000c700";
-		sdhci0 = "/sdhci@78000600";
-		sdhci1 = "/sdhci@78000200";
+		mmc0 = "/sdhci@78000600";
+		mmc1 = "/sdhci@78000200";
 		spi0 = "/spi@7000d400";
 		usb0 = "/usb@7d000000";
 		usb1 = "/usb@7d004000"; /* on module only, for ASIX */
 		usb2 = "/usb@7d008000";
 	};
 
-	host1x {
-		status = "okay";
+	memory {
+		device_type = "memory";
+		reg = <0x80000000 0x40000000>;
+	};
+
+	host1x@50000000 {
 		dc@54200000 {
-			status = "okay";
 			rgb {
 				status = "okay";
 				nvidia,panel = <&lcd_panel>;
+				display-timings {
+					timing@0 {
+						/* VESA VGA */
+						clock-frequency = <25175000>;
+						hactive = <640>;
+						vactive = <480>;
+						hback-porch = <48>;
+						hfront-porch = <16>;
+						hsync-len = <96>;
+						vback-porch = <31>;
+						vfront-porch = <11>;
+						vsync-len = <2>;
+					};
+				};
 			};
 		};
 	};
 
-	memory {
-		device_type = "memory";
-		reg = <0x80000000 0x40000000>;
+	pwm@7000a000 {
+		status = "okay";
 	};
 
 	/*
@@ -44,7 +60,7 @@
 	 */
 	i2c@7000c000 {
 		status = "okay";
-		clock-frequency = <100000>;
+		clock-frequency = <400000>;
 	};
 
 	/* GEN2_I2C: unused */
@@ -54,7 +70,7 @@
 	/* DDC_CLOCK/DATA on X3 pin 15/16 (e.g. display EDID) */
 	i2c@7000c700 {
 		status = "okay";
-		clock-frequency = <100000>;
+		clock-frequency = <10000>;
 	};
 
 	/*
@@ -87,13 +103,12 @@
 	/* EHCI instance 0: USB1_DP/N -> USBC_P/N */
 	usb@7d000000 {
 		status = "okay";
-		dr_mode = "host";
+		dr_mode = "otg";
 	};
 
 	/* EHCI instance 1: USB2_DP/N -> AX88772B */
 	usb@7d004000 {
 		status = "okay";
-		phy_type = "utmi";
 		/* VBUS_LAN */
 		nvidia,vbus-gpio = <&gpio TEGRA_GPIO(DD, 2) GPIO_ACTIVE_HIGH>;
 	};
@@ -105,21 +120,53 @@
 		nvidia,vbus-gpio = <&gpio TEGRA_GPIO(W, 2) GPIO_ACTIVE_LOW>;
 	};
 
+	backlight: backlight {
+		compatible = "pwm-backlight";
+
+		brightness-levels = <255 128 64 32 16 8 4 0>;
+		default-brightness-level = <6>;
+		/* BL_ON */
+		enable-gpios = <&gpio TEGRA_GPIO(V, 2) GPIO_ACTIVE_HIGH>;
+		power-supply = <&reg_3v3>;
+		/* PWM<A> */
+		pwms = <&pwm 0 5000000>;
+	};
+
+	clocks {
+		compatible = "simple-bus";
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		clk32k_in: clk@0 {
+			compatible = "fixed-clock";
+			reg=<0>;
+			#clock-cells = <0>;
+			clock-frequency = <32768>;
+		};
+	};
+
 	lcd_panel: panel {
-		clock = <25175000>;
-		xres = <640>;
-		yres = <480>;
-		left-margin = <48>;	/* horizontal back porch */
-		right-margin = <16>;	/* horizontal front porch */
-		hsync-len = <96>;
-		lower-margin = <11>;	/* vertical front porch */
-		upper-margin = <31>;	/* vertical back porch */
-		vsync-len = <2>;
-		hsync-active-high;
-		vsync-active-high;
-		nvidia,bits-per-pixel = <16>;
-		nvidia,pwm = <&pwm 0 0>;
-		nvidia,backlight-enable-gpios = <&gpio TEGRA_GPIO(V, 2) GPIO_ACTIVE_HIGH>;
-		nvidia,panel-timings = <0 0 0 0>;
+		/*
+		 * edt,et057090dhu: EDT 5.7" LCD TFT
+		 * edt,et070080dh6: EDT 7.0" LCD TFT
+		 */
+		compatible = "edt,et057090dhu", "simple-panel";
+
+		backlight = <&backlight>;
+	};
+
+	regulators {
+		compatible = "simple-bus";
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		reg_3v3: regulator@0 {
+			compatible = "regulator-fixed";
+			reg = <0>;
+			regulator-name = "+V3.3";
+			regulator-min-microvolt = <3300000>;
+			regulator-max-microvolt = <3300000>;
+			regulator-always-on;
+		};
 	};
 };

@@ -51,15 +51,6 @@ u32 get_cpu_type(void)
 }
 
 /**
- * get_board_rev() - setup to pass kernel board revision information
- * returns: 0 for the ATAG REVISION tag value.
- */
-u32 __weak get_board_rev(void)
-{
-	return 0;
-}
-
-/**
  * get_device_type(): tell if GP/HS/EMU/TST
  */
 u32 get_device_type(void)
@@ -74,9 +65,7 @@ u32 get_device_type(void)
  */
 u32 get_sysboot_value(void)
 {
-	int mode;
-	mode = readl(&cstat->statusreg) & (SYSBOOT_MASK);
-	return mode;
+	return readl(&cstat->statusreg) & SYSBOOT_MASK;
 }
 
 #ifdef CONFIG_DISPLAY_CPUINFO
@@ -106,6 +95,9 @@ int print_cpuinfo(void)
 	case TI81XX:
 		cpu_s = "TI81XX";
 		break;
+	case AM437X:
+		cpu_s = "AM437X";
+		break;
 	default:
 		cpu_s = "Unknown CPU type";
 		break;
@@ -121,7 +113,7 @@ int print_cpuinfo(void)
 	else
 		sec_s = "?";
 
-	printf("%s-%s rev %s\n", cpu_s, sec_s, rev_s);
+	printf("CPU  : %s-%s rev %s\n", cpu_s, sec_s, rev_s);
 
 	return 0;
 }

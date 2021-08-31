@@ -6,7 +6,7 @@
  *
  * Maintainer: Kumar Gala <galak@kernel.crashing.org>
  *
- * Copyright 2004 Freescale Semiconductor, Inc
+ * Copyright 2004,2012 Freescale Semiconductor, Inc
  *
  * This program is free software; you can redistribute  it and/or modify it
  * under  the terms of  the GNU General  Public License as published by the
@@ -16,6 +16,10 @@
 
 #ifndef _FSL_DEVICE_H_
 #define _FSL_DEVICE_H_
+
+#define FSL_UTMI_PHY_DLY	10	/*As per P1010RM, delay for UTMI
+				PHY CLK to become stable - 10ms*/
+#define FSL_USB_PHY_CLK_TIMEOUT	10000	/* uSec */
 
 #include <linux/types.h>
 
@@ -43,6 +47,15 @@
  *
  */
 
+enum fsl_usb2_controller_ver {
+	FSL_USB_VER_NONE = -1,
+	FSL_USB_VER_OLD = 0,
+	FSL_USB_VER_1_6 = 1,
+	FSL_USB_VER_2_2 = 2,
+	FSL_USB_VER_2_4 = 3,
+	FSL_USB_VER_2_5 = 4,
+};
+
 enum fsl_usb2_operating_modes {
 	FSL_USB2_MPH_HOST,
 	FSL_USB2_DR_HOST,
@@ -56,13 +69,7 @@ enum fsl_usb2_phy_modes {
 	FSL_USB2_PHY_UTMI,
 	FSL_USB2_PHY_UTMI_WIDE,
 	FSL_USB2_PHY_SERIAL,
-};
-
-enum fsl_usb2_phy_types {
-	FSL_USB2_PHY_TYPE_UTMIP = 1,
-	FSL_USB2_PHY_TYPE_ULPI = 2,
-	FSL_USB2_PHY_TYPE_HSIC = 3,
-	FSL_USB2_PHY_TYPE_ICUSB = 4,
+	FSL_USB2_PHY_UTMI_DUAL,
 };
 
 struct clk;
@@ -70,6 +77,7 @@ struct platform_device;
 
 struct fsl_usb2_platform_data {
 	/* board specific information */
+	enum fsl_usb2_controller_ver	controller_ver;
 	enum fsl_usb2_operating_modes	operating_mode;
 	enum fsl_usb2_phy_modes		phy_mode;
 	unsigned int			port_enables;
@@ -79,6 +87,7 @@ struct fsl_usb2_platform_data {
 	void		(*exit)(struct platform_device *);
 	void __iomem	*regs;		/* ioremap'd register base */
 	struct clk	*clk;
+	unsigned	power_budget;	/* hcd->power_budget */
 	unsigned	big_endian_mmio:1;
 	unsigned	big_endian_desc:1;
 	unsigned	es:1;		/* need USBMODE:ES */
@@ -89,6 +98,9 @@ struct fsl_usb2_platform_data {
 
 	unsigned	suspended:1;
 	unsigned	already_suspended:1;
+	unsigned        has_fsl_erratum_a007792:1;
+	unsigned        has_fsl_erratum_a005275:1;
+	unsigned        check_phy_clk_valid:1;
 
 	/* register save area for suspend/resume */
 	u32		pm_command;
@@ -101,9 +113,6 @@ struct fsl_usb2_platform_data {
 	u32		pm_configured_flag;
 	u32		pm_portsc;
 	u32		pm_usbgenctrl;
-
-        void		*phy_config;
-	enum fsl_usb2_phy_types usb_phy_type;
 };
 
 /* Flags in fsl_usb2_mph_platform_data */

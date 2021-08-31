@@ -1,43 +1,94 @@
 /*
- * linux/sound/soc/tegra/tegra20_ac97.h
+ * tegra20_ac97.h - Definitions for the Tegra20 AC97 controller driver
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
+ * Copyright (c) 2012 Lucas Stach <dev@lynxeye.de>
+ *
+ * Partly based on code copyright/by:
+ *
+ * Copyright (c) 2011,2012 Toradex Inc.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * version 2 as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License for more details.
+ *
  */
 
-#ifndef _TEGRA_AC97_H
-#define _TEGRA_AC97_H
+#ifndef __TEGRA20_AC97_H__
+#define __TEGRA20_AC97_H__
 
 #include "tegra_pcm.h"
 
-/* Tegra DAI ID's */
-#define TEGRA_DAI_AC97_PCM	0	/* slot 3:	PCM left channel */
-					/* slot 4:	PCM right channel */
-#define TEGRA_DAI_AC97_MODEM	1	/* slot 5:	modem line 1 */
+#define TEGRA20_AC97_CTRL				0x00
+#define TEGRA20_AC97_CMD				0x04
+#define TEGRA20_AC97_STATUS1				0x08
+/* ... */
+#define TEGRA20_AC97_FIFO1_SCR				0x1c
+/* ... */
+#define TEGRA20_AC97_FIFO_TX1				0x40
+#define TEGRA20_AC97_FIFO_RX1				0x80
 
-					/* slot 11:	touch panel digitizer data */
+/* TEGRA20_AC97_CTRL */
+#define TEGRA20_AC97_CTRL_STM2_EN			(1 << 16)
+#define TEGRA20_AC97_CTRL_DOUBLE_SAMPLING_EN		(1 << 11)
+#define TEGRA20_AC97_CTRL_IO_CNTRL_EN			(1 << 10)
+#define TEGRA20_AC97_CTRL_HSET_DAC_EN			(1 << 9)
+#define TEGRA20_AC97_CTRL_LINE2_DAC_EN			(1 << 8)
+#define TEGRA20_AC97_CTRL_PCM_LFE_EN			(1 << 7)
+#define TEGRA20_AC97_CTRL_PCM_SUR_EN			(1 << 6)
+#define TEGRA20_AC97_CTRL_PCM_CEN_DAC_EN		(1 << 5)
+#define TEGRA20_AC97_CTRL_LINE1_DAC_EN			(1 << 4)
+#define TEGRA20_AC97_CTRL_PCM_DAC_EN			(1 << 3)
+#define TEGRA20_AC97_CTRL_COLD_RESET			(1 << 2)
+#define TEGRA20_AC97_CTRL_WARM_RESET			(1 << 1)
+#define TEGRA20_AC97_CTRL_STM_EN			(1 << 0)
 
-#define AC97_FIFO_ATN_LVL_NONE		0
-#define AC97_FIFO_ATN_LVL_EMPTY		1
-#define AC97_FIFO_ATN_LVL_QUART		2
-#define AC97_FIFO_ATN_LVL_3QUART	3
-#define AC97_FIFO_ATN_LVL_FULL		4
+/* TEGRA20_AC97_CMD */
+#define TEGRA20_AC97_CMD_CMD_ADDR_SHIFT			24
+#define TEGRA20_AC97_CMD_CMD_ADDR_MASK			(0xff << TEGRA20_AC97_CMD_CMD_ADDR_SHIFT)
+#define TEGRA20_AC97_CMD_CMD_DATA_SHIFT			8
+#define TEGRA20_AC97_CMD_CMD_DATA_MASK			(0xffff << TEGRA20_AC97_CMD_CMD_DATA_SHIFT)
+#define TEGRA20_AC97_CMD_CMD_ID_SHIFT			2
+#define TEGRA20_AC97_CMD_CMD_ID_MASK			(0x3 << TEGRA20_AC97_CMD_CMD_ID_SHIFT)
+#define TEGRA20_AC97_CMD_BUSY				(1 << 0)
 
-#define AC97_FIFO_TX	0
-#define AC97_FIFO_RX	1
+/* TEGRA20_AC97_STATUS1 */
+#define TEGRA20_AC97_STATUS1_STA_ADDR1_SHIFT		24
+#define TEGRA20_AC97_STATUS1_STA_ADDR1_MASK		(0xff << TEGRA20_AC97_STATUS1_STA_ADDR1_SHIFT)
+#define TEGRA20_AC97_STATUS1_STA_DATA1_SHIFT		8
+#define TEGRA20_AC97_STATUS1_STA_DATA1_MASK		(0xffff << TEGRA20_AC97_STATUS1_STA_DATA1_SHIFT)
+#define TEGRA20_AC97_STATUS1_STA_VALID1			(1 << 2)
+#define TEGRA20_AC97_STATUS1_STANDBY1			(1 << 1)
+#define TEGRA20_AC97_STATUS1_CODEC1_RDY			(1 << 0)
 
-#define AC97_SAMPLE_RATES	SNDRV_PCM_RATE_8000_48000
+/* TEGRA20_AC97_FIFO1_SCR */
+#define TEGRA20_AC97_FIFO_SCR_REC_MT_CNT_SHIFT		27
+#define TEGRA20_AC97_FIFO_SCR_REC_MT_CNT_MASK		(0x1f << TEGRA20_AC97_FIFO_SCR_REC_MT_CNT_SHIFT)
+#define TEGRA20_AC97_FIFO_SCR_PB_MT_CNT_SHIFT		22
+#define TEGRA20_AC97_FIFO_SCR_PB_MT_CNT_MASK		(0x1f << TEGRA20_AC97_FIFO_SCR_PB_MT_CNT_SHIFT)
+#define TEGRA20_AC97_FIFO_SCR_REC_OVERRUN_INT_STA	(1 << 19)
+#define TEGRA20_AC97_FIFO_SCR_PB_UNDERRUN_INT_STA	(1 << 18)
+#define TEGRA20_AC97_FIFO_SCR_REC_FORCE_MT		(1 << 17)
+#define TEGRA20_AC97_FIFO_SCR_PB_FORCE_MT		(1 << 16)
+#define TEGRA20_AC97_FIFO_SCR_REC_FULL_EN		(1 << 15)
+#define TEGRA20_AC97_FIFO_SCR_REC_3QRT_FULL_EN		(1 << 14)
+#define TEGRA20_AC97_FIFO_SCR_REC_QRT_FULL_EN		(1 << 13)
+#define TEGRA20_AC97_FIFO_SCR_REC_EMPTY_EN		(1 << 12)
+#define TEGRA20_AC97_FIFO_SCR_PB_NOT_FULL_EN		(1 << 11)
+#define TEGRA20_AC97_FIFO_SCR_PB_QRT_MT_EN		(1 << 10)
+#define TEGRA20_AC97_FIFO_SCR_PB_3QRT_MT_EN		(1 << 9)
+#define TEGRA20_AC97_FIFO_SCR_PB_EMPTY_MT_EN		(1 << 8)
 
-/* AC97 controller */
 struct tegra20_ac97 {
-	struct clk *dap_mclk;
 	struct clk *clk_ac97;
-	struct snd_card *card;
-	struct tegra_pcm_dma_params capture_dma_data;
-	phys_addr_t phys;
-	struct tegra_pcm_dma_params playback_dma_data;
-	void __iomem *regs;
+	struct snd_dmaengine_dai_dma_data capture_dma_data;
+	struct snd_dmaengine_dai_dma_data playback_dma_data;
+	struct regmap *regmap;
+	int reset_gpio;
+	int sync_gpio;
 };
-
-#endif
+#endif /* __TEGRA20_AC97_H__ */

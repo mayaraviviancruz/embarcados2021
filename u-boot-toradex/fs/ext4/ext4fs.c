@@ -55,7 +55,7 @@ int ext4fs_read_file(struct ext2fs_node *node, loff_t pos,
 	int log2blksz = fs->dev_desc->log2blksz;
 	int log2_fs_blocksize = LOG2_BLOCK_SIZE(node->data) - log2blksz;
 	int blocksize = (1 << (log2_fs_blocksize + log2blksz));
-	unsigned int filesize = __le32_to_cpu(node->inode.size);
+	unsigned int filesize = le32_to_cpu(node->inode.size);
 	lbaint_t previous_block_number = -1;
 	lbaint_t delayed_start = 0;
 	lbaint_t delayed_extent = 0;
@@ -198,7 +198,7 @@ int ext4fs_read(char *buf, loff_t len, loff_t *actread)
 	return ext4fs_read_file(ext4fs_file, 0, len, buf, actread);
 }
 
-int ext4fs_probe(block_dev_desc_t *fs_dev_desc,
+int ext4fs_probe(struct blk_desc *fs_dev_desc,
 		 disk_partition_t *fs_partition)
 {
 	ext4fs_set_blk_dev(fs_dev_desc, fs_partition);

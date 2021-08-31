@@ -1,0 +1,3 @@
+export ARCH=arm
+export PATH=~/gcc-linaro/bin/:/home/mayara/gcc-linaro/bin/:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin
+export CROSS_COMPILE=arm-linux-gnueabihf-

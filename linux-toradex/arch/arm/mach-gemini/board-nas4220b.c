@@ -18,7 +18,6 @@
 #include <linux/leds.h>
 #include <linux/input.h>
 #include <linux/gpio_keys.h>
-#include <linux/mdio-gpio.h>
 #include <linux/io.h>
 
 #include <asm/setup.h>
@@ -30,10 +29,6 @@
 #include <mach/global_reg.h>
 
 #include "common.h"
-
-static struct sys_timer ib4220b_timer = {
-	.init	= gemini_timer_init,
-};
 
 static struct gpio_led ib4220b_leds[] = {
 	{
@@ -102,9 +97,10 @@ static void __init ib4220b_init(void)
 }
 
 MACHINE_START(NAS4220B, "Raidsonic NAS IB-4220-B")
-	.boot_params	= 0x100,
+	.atag_offset	= 0x100,
 	.map_io		= gemini_map_io,
 	.init_irq	= gemini_init_irq,
-	.timer		= &ib4220b_timer,
+	.init_time	= gemini_timer_init,
 	.init_machine	= ib4220b_init,
+	.restart	= gemini_restart,
 MACHINE_END

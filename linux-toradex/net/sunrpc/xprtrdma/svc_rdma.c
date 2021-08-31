@@ -38,8 +38,7 @@
  *
  * Author: Tom Tucker <tom@opengridcomputing.com>
  */
-#include <linux/module.h>
-#include <linux/init.h>
+
 #include <linux/slab.h>
 #include <linux/fs.h>
 #include <linux/sysctl.h>
@@ -47,6 +46,7 @@
 #include <linux/sunrpc/clnt.h>
 #include <linux/sunrpc/sched.h>
 #include <linux/sunrpc/svc_rdma.h>
+#include "xprt_rdma.h"
 
 #define RPCDBG_FACILITY	RPCDBG_SVCXPRT
 
@@ -83,7 +83,7 @@ struct workqueue_struct *svc_rdma_wq;
  * resets the associated statistic to zero. Any read returns it's
  * current value.
  */
-static int read_reset_stat(ctl_table *table, int write,
+static int read_reset_stat(struct ctl_table *table, int write,
 			   void __user *buffer, size_t *lenp,
 			   loff_t *ppos)
 {
@@ -118,7 +118,7 @@ static int read_reset_stat(ctl_table *table, int write,
 }
 
 static struct ctl_table_header *svcrdma_table_header;
-static ctl_table svcrdma_parm_table[] = {
+static struct ctl_table svcrdma_parm_table[] = {
 	{
 		.procname	= "max_requests",
 		.data		= &svcrdma_max_requests,
@@ -213,7 +213,7 @@ static ctl_table svcrdma_parm_table[] = {
 	{ },
 };
 
-static ctl_table svcrdma_table[] = {
+static struct ctl_table svcrdma_table[] = {
 	{
 		.procname	= "svc_rdma",
 		.mode		= 0555,
@@ -222,7 +222,7 @@ static ctl_table svcrdma_table[] = {
 	{ },
 };
 
-static ctl_table svcrdma_root_table[] = {
+static struct ctl_table svcrdma_root_table[] = {
 	{
 		.procname	= "sunrpc",
 		.mode		= 0555,
@@ -239,6 +239,9 @@ void svc_rdma_cleanup(void)
 		unregister_sysctl_table(svcrdma_table_header);
 		svcrdma_table_header = NULL;
 	}
+#if defined(CONFIG_SUNRPC_BACKCHANNEL)
+	svc_unreg_xprt_class(&svc_rdma_bc_class);
+#endif
 	svc_unreg_xprt_class(&svc_rdma_class);
 	kmem_cache_destroy(svc_rdma_map_cachep);
 	kmem_cache_destroy(svc_rdma_ctxt_cachep);
@@ -286,6 +289,9 @@ int svc_rdma_init(void)
 
 	/* Register RDMA with the SVC transport switch */
 	svc_reg_xprt_class(&svc_rdma_class);
+#if defined(CONFIG_SUNRPC_BACKCHANNEL)
+	svc_reg_xprt_class(&svc_rdma_bc_class);
+#endif
 	return 0;
  err1:
 	kmem_cache_destroy(svc_rdma_map_cachep);
@@ -294,8 +300,3 @@ int svc_rdma_init(void)
 	destroy_workqueue(svc_rdma_wq);
 	return -ENOMEM;
 }
-MODULE_AUTHOR("Tom Tucker <tom@opengridcomputing.com>");
-MODULE_DESCRIPTION("SVC RDMA Transport");
-MODULE_LICENSE("Dual BSD/GPL");
-module_init(svc_rdma_init);
-module_exit(svc_rdma_cleanup);

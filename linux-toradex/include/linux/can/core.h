@@ -8,21 +8,19 @@
  * Copyright (c) 2002-2007 Volkswagen Group Electronic Research
  * All rights reserved.
  *
- * Send feedback to <socketcan-users@lists.berlios.de>
- *
  */
 
-#ifndef CAN_CORE_H
-#define CAN_CORE_H
+#ifndef _CAN_CORE_H
+#define _CAN_CORE_H
 
 #include <linux/can.h>
 #include <linux/skbuff.h>
 #include <linux/netdevice.h>
 
-#define CAN_VERSION "20090105"
+#define CAN_VERSION "20120528"
 
 /* increment this number each time you change some user-space interface */
-#define CAN_ABI_VERSION "8"
+#define CAN_ABI_VERSION "9"
 
 #define CAN_VERSION_STRING "rev " CAN_VERSION " abi " CAN_ABI_VERSION
 
@@ -47,10 +45,9 @@ struct can_proto {
 extern int  can_proto_register(const struct can_proto *cp);
 extern void can_proto_unregister(const struct can_proto *cp);
 
-extern int  can_rx_register(struct net_device *dev, canid_t can_id,
-			    canid_t mask,
-			    void (*func)(struct sk_buff *, void *),
-			    void *data, char *ident);
+int can_rx_register(struct net_device *dev, canid_t can_id, canid_t mask,
+		    void (*func)(struct sk_buff *, void *),
+		    void *data, char *ident, struct sock *sk);
 
 extern void can_rx_unregister(struct net_device *dev, canid_t can_id,
 			      canid_t mask,
@@ -60,4 +57,4 @@ extern void can_rx_unregister(struct net_device *dev, canid_t can_id,
 extern int can_send(struct sk_buff *skb, int loop);
 extern int can_ioctl(struct socket *sock, unsigned int cmd, unsigned long arg);
 
-#endif /* CAN_CORE_H */
+#endif /* !_CAN_CORE_H */

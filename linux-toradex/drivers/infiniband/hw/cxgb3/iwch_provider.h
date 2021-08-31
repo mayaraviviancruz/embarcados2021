@@ -77,6 +77,8 @@ struct iwch_mr {
 	struct iwch_dev *rhp;
 	u64 kva;
 	struct tpt_attributes attr;
+	u64 *pages;
+	u32 npages;
 };
 
 typedef struct iwch_mw iwch_mw_handle;
@@ -103,6 +105,7 @@ struct iwch_cq {
 	struct iwch_dev *rhp;
 	struct t3_cq cq;
 	spinlock_t lock;
+	spinlock_t comp_handler_lock;
 	atomic_t refcnt;
 	wait_queue_head_t wait;
 	u32 __user *user_rptr_addr;

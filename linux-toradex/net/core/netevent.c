@@ -15,6 +15,7 @@
 
 #include <linux/rtnetlink.h>
 #include <linux/notifier.h>
+#include <linux/export.h>
 #include <net/netevent.h>
 
 static ATOMIC_NOTIFIER_HEAD(netevent_notif_chain);
@@ -30,10 +31,7 @@ static ATOMIC_NOTIFIER_HEAD(netevent_notif_chain);
  */
 int register_netevent_notifier(struct notifier_block *nb)
 {
-	int err;
-
-	err = atomic_notifier_chain_register(&netevent_notif_chain, nb);
-	return err;
+	return atomic_notifier_chain_register(&netevent_notif_chain, nb);
 }
 EXPORT_SYMBOL_GPL(register_netevent_notifier);
 

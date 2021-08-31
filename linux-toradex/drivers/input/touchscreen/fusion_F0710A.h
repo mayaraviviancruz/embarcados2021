@@ -13,18 +13,18 @@
 #define fusion_F0710A_DATA_INFO			0x00
 
 /* First Point*/
-#define fusion_F0710A_POS_X1_HI			0x01 	/* 16-bit register, MSB */
-#define fusion_F0710A_POS_X1_LO			0x02 	/* 16-bit register, LSB */
-#define fusion_F0710A_POS_Y1_HI			0x03 	/* 16-bit register, MSB */
-#define fusion_F0710A_POS_Y1_LO			0x04 	/* 16-bit register, LSB */
+#define fusion_F0710A_POS_X1_HI			0x01	/* 16-bit register, MSB */
+#define fusion_F0710A_POS_X1_LO			0x02	/* 16-bit register, LSB */
+#define fusion_F0710A_POS_Y1_HI			0x03	/* 16-bit register, MSB */
+#define fusion_F0710A_POS_Y1_LO			0x04	/* 16-bit register, LSB */
 #define fusion_F0710A_FIR_PRESS			0X05
 #define fusion_F0710A_FIR_TIDTS			0X06
 
 /* Second Point */
-#define fusion_F0710A_POS_X2_HI			0x07 	/* 16-bit register, MSB */
-#define fusion_F0710A_POS_X2_LO			0x08 	/* 16-bit register, LSB */
-#define fusion_F0710A_POS_Y2_HI			0x09 	/* 16-bit register, MSB */
-#define fusion_F0710A_POS_Y2_LO			0x0A 	/* 16-bit register, LSB */
+#define fusion_F0710A_POS_X2_HI			0x07	/* 16-bit register, MSB */
+#define fusion_F0710A_POS_X2_LO			0x08	/* 16-bit register, LSB */
+#define fusion_F0710A_POS_Y2_HI			0x09	/* 16-bit register, MSB */
+#define fusion_F0710A_POS_Y2_LO			0x0A	/* 16-bit register, LSB */
 #define fusion_F0710A_SEC_PRESS			0x0B
 #define fusion_F0710A_SEC_TIDTS			0x0C
 
@@ -63,7 +63,7 @@
 struct fusion_F0710A_info {
 	int xres; /* x resolution */
 	int yres; /* y resolution */
-	int xy_reverse; /* if need reverse in the x,y value x=xres-1-x, y=yres-1-y*/    
+	int xy_reverse; /* if need reverse in the x,y value x=xres-1-x, y=yres-1-y*/
 };
 
 struct fusion_F0710A_data {
@@ -71,6 +71,7 @@ struct fusion_F0710A_data {
 	struct i2c_client		*client;
 	struct workqueue_struct	*workq;
 	struct input_dev		*input;
+	int				gpio_reset;
 	u16						x1;
 	u16						y1;
 	u8						z1;
@@ -84,4 +85,3 @@ struct fusion_F0710A_data {
 	u8						f_num;
 	u8						save_points;
 };
-

@@ -28,7 +28,7 @@ struct task_struct;
 struct pci_dev;
 
 extern int amd_iommu_detect(void);
-
+extern int amd_iommu_init_hardware(void);
 
 /**
  * amd_iommu_enable_device_erratum() - Enable erratum workaround for device
@@ -118,6 +118,13 @@ typedef int (*amd_iommu_invalid_ppr_cb)(struct pci_dev *pdev,
 
 extern int amd_iommu_set_invalid_ppr_cb(struct pci_dev *pdev,
 					amd_iommu_invalid_ppr_cb cb);
+
+#define PPR_FAULT_EXEC	(1 << 1)
+#define PPR_FAULT_READ  (1 << 2)
+#define PPR_FAULT_WRITE (1 << 5)
+#define PPR_FAULT_USER  (1 << 6)
+#define PPR_FAULT_RSVD  (1 << 7)
+#define PPR_FAULT_GN    (1 << 8)
 
 /**
  * amd_iommu_device_info() - Get information about IOMMUv2 support of a

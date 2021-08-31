@@ -11,6 +11,7 @@
  */
 #include <linux/init.h>
 #include <linux/slab.h>
+#include <linux/export.h>
 #include <linux/device.h>
 #include <linux/spi/spi.h>
 #include <linux/spi/eeprom.h>
@@ -79,7 +80,6 @@ static int __init early_seeprom_probe(struct spi_device *spi)
 static struct spi_driver early_seeprom_driver __initdata = {
 	.driver = {
 		.name	= "at25",
-		.owner	= THIS_MODULE,
 	},
 	.probe	= early_seeprom_probe,
 };

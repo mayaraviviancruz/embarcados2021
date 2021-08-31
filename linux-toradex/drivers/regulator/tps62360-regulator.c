@@ -26,13 +26,16 @@
 #include <linux/module.h>
 #include <linux/init.h>
 #include <linux/err.h>
+#include <linux/of.h>
+#include <linux/of_device.h>
+#include <linux/of_gpio.h>
+#include <linux/regulator/of_regulator.h>
 #include <linux/platform_device.h>
 #include <linux/regulator/driver.h>
 #include <linux/regulator/machine.h>
 #include <linux/regulator/tps62360.h>
 #include <linux/gpio.h>
 #include <linux/i2c.h>
-#include <linux/delay.h>
 #include <linux/slab.h>
 #include <linux/regmap.h>
 
@@ -62,10 +65,8 @@ struct tps62360_chip {
 	struct regulator_desc desc;
 	struct regulator_dev *rdev;
 	struct regmap *regmap;
-	int chip_id;
 	int vsel0_gpio;
 	int vsel1_gpio;
-	int voltage_base;
 	u8 voltage_reg_mask;
 	bool en_internal_pulldn;
 	bool en_discharge;
@@ -73,7 +74,6 @@ struct tps62360_chip {
 	int lru_index[4];
 	int curr_vset_vsel[4];
 	int curr_vset_id;
-	int change_uv_per_us;
 };
 
 /*
@@ -135,35 +135,24 @@ static int tps62360_dcdc_get_voltage_sel(struct regulator_dev *dev)
 	return vsel;
 }
 
-static int tps62360_dcdc_set_voltage(struct regulator_dev *dev,
-	     int min_uV, int max_uV, unsigned *selector)
+static int tps62360_dcdc_set_voltage_sel(struct regulator_dev *dev,
+					 unsigned selector)
 {
 	struct tps62360_chip *tps = rdev_get_drvdata(dev);
-	int vsel;
 	int ret;
 	bool found = false;
 	int new_vset_id = tps->curr_vset_id;
-
-	if ((max_uV < min_uV) || (max_uV < tps->voltage_base))
-		return -EINVAL;
-
-	if (min_uV > (tps->voltage_base + (tps->desc.n_voltages - 1) * 10000))
-		return -EINVAL;
-
-	vsel = DIV_ROUND_UP(min_uV - tps->voltage_base, 10000);
-	if (selector)
-		*selector = (vsel & tps->voltage_reg_mask);
 
 	/*
 	 * If gpios are available to select the VSET register then least
 	 * recently used register for new configuration.
 	 */
 	if (tps->valid_gpios)
-		found = find_voltage_set_register(tps, vsel, &new_vset_id);
+		found = find_voltage_set_register(tps, selector, &new_vset_id);
 
 	if (!found) {
 		ret = regmap_update_bits(tps->regmap, REG_VSET0 + new_vset_id,
-				tps->voltage_reg_mask, vsel);
+				tps->voltage_reg_mask, selector);
 		if (ret < 0) {
 			dev_err(tps->dev,
 				"%s(): register %d update failed with err %d\n",
@@ -171,7 +160,7 @@ static int tps62360_dcdc_set_voltage(struct regulator_dev *dev,
 			return ret;
 		}
 		tps->curr_vset_id = new_vset_id;
-		tps->curr_vset_vsel[new_vset_id] = vsel;
+		tps->curr_vset_vsel[new_vset_id] = selector;
 	}
 
 	/* Select proper VSET register vio gpios */
@@ -181,34 +170,6 @@ static int tps62360_dcdc_set_voltage(struct regulator_dev *dev,
 					(new_vset_id >> 1) & 0x1);
 	}
 	return 0;
-}
-
-static int tps62360_dcdc_list_voltage(struct regulator_dev *dev,
-					unsigned selector)
-{
-	struct tps62360_chip *tps = rdev_get_drvdata(dev);
-
-	if (selector >= tps->desc.n_voltages)
-		return -EINVAL;
-
-	return tps->voltage_base + selector * 10000;
-}
-
-static int tps62360_set_voltage_time_sel(struct regulator_dev *rdev,
-		unsigned int old_selector, unsigned int new_selector)
-{
-	struct tps62360_chip *tps = rdev_get_drvdata(rdev);
-	int old_uV, new_uV;
-
-	old_uV = tps62360_dcdc_list_voltage(rdev, old_selector);
-	if (old_uV < 0)
-		return old_uV;
-
-	new_uV = tps62360_dcdc_list_voltage(rdev, new_selector);
-	if (new_uV < 0)
-		return new_uV;
-
-	return DIV_ROUND_UP(abs(old_uV - new_uV), tps->change_uv_per_us);
 }
 
 static int tps62360_set_mode(struct regulator_dev *rdev, unsigned int mode)
@@ -274,14 +235,15 @@ static unsigned int tps62360_get_mode(struct regulator_dev *rdev)
 
 static struct regulator_ops tps62360_dcdc_ops = {
 	.get_voltage_sel	= tps62360_dcdc_get_voltage_sel,
-	.set_voltage		= tps62360_dcdc_set_voltage,
-	.list_voltage		= tps62360_dcdc_list_voltage,
-	.set_voltage_time_sel	= tps62360_set_voltage_time_sel,
+	.set_voltage_sel	= tps62360_dcdc_set_voltage_sel,
+	.list_voltage		= regulator_list_voltage_linear,
+	.map_voltage		= regulator_map_voltage_linear,
+	.set_voltage_time_sel	= regulator_set_voltage_time_sel,
 	.set_mode		= tps62360_set_mode,
 	.get_mode		= tps62360_get_mode,
 };
 
-static int __devinit tps62360_init_dcdc(struct tps62360_chip *tps,
+static int tps62360_init_dcdc(struct tps62360_chip *tps,
 		struct tps62360_regulator_platform_data *pdata)
 {
 	int ret;
@@ -316,47 +278,114 @@ static int __devinit tps62360_init_dcdc(struct tps62360_chip *tps,
 			__func__, REG_RAMPCTRL, ret);
 		return ret;
 	}
-	ramp_ctrl = (ramp_ctrl >> 4) & 0x7;
+	ramp_ctrl = (ramp_ctrl >> 5) & 0x7;
 
 	/* ramp mV/us = 32/(2^ramp_ctrl) */
-	tps->change_uv_per_us = DIV_ROUND_UP(32000, BIT(ramp_ctrl));
+	tps->desc.ramp_delay = DIV_ROUND_UP(32000, BIT(ramp_ctrl));
 	return ret;
-}
-
-static bool is_volatile_reg(struct device *dev, unsigned int reg)
-{
-	return false;
 }
 
 static const struct regmap_config tps62360_regmap_config = {
 	.reg_bits		= 8,
 	.val_bits		= 8,
-	.volatile_reg		= is_volatile_reg,
 	.max_register		= REG_CHIPID,
 	.cache_type		= REGCACHE_RBTREE,
 };
 
-static int __devinit tps62360_probe(struct i2c_client *client,
+static struct tps62360_regulator_platform_data *
+	of_get_tps62360_platform_data(struct device *dev,
+				      const struct regulator_desc *desc)
+{
+	struct tps62360_regulator_platform_data *pdata;
+	struct device_node *np = dev->of_node;
+
+	pdata = devm_kzalloc(dev, sizeof(*pdata), GFP_KERNEL);
+	if (!pdata)
+		return NULL;
+
+	pdata->reg_init_data = of_get_regulator_init_data(dev, dev->of_node,
+							  desc);
+	if (!pdata->reg_init_data) {
+		dev_err(dev, "Not able to get OF regulator init data\n");
+		return NULL;
+	}
+
+	pdata->vsel0_gpio = of_get_named_gpio(np, "vsel0-gpio", 0);
+	pdata->vsel1_gpio = of_get_named_gpio(np, "vsel1-gpio", 0);
+
+	if (of_find_property(np, "ti,vsel0-state-high", NULL))
+		pdata->vsel0_def_state = 1;
+
+	if (of_find_property(np, "ti,vsel1-state-high", NULL))
+		pdata->vsel1_def_state = 1;
+
+	if (of_find_property(np, "ti,enable-pull-down", NULL))
+		pdata->en_internal_pulldn = true;
+
+	if (of_find_property(np, "ti,enable-vout-discharge", NULL))
+		pdata->en_discharge = true;
+
+	return pdata;
+}
+
+#if defined(CONFIG_OF)
+static const struct of_device_id tps62360_of_match[] = {
+	 { .compatible = "ti,tps62360", .data = (void *)TPS62360},
+	 { .compatible = "ti,tps62361", .data = (void *)TPS62361},
+	 { .compatible = "ti,tps62362", .data = (void *)TPS62362},
+	 { .compatible = "ti,tps62363", .data = (void *)TPS62363},
+	{},
+};
+MODULE_DEVICE_TABLE(of, tps62360_of_match);
+#endif
+
+static int tps62360_probe(struct i2c_client *client,
 				     const struct i2c_device_id *id)
 {
+	struct regulator_config config = { };
 	struct tps62360_regulator_platform_data *pdata;
 	struct regulator_dev *rdev;
 	struct tps62360_chip *tps;
 	int ret;
 	int i;
+	int chip_id;
 
-	pdata = client->dev.platform_data;
+	pdata = dev_get_platdata(&client->dev);
+
+	tps = devm_kzalloc(&client->dev, sizeof(*tps), GFP_KERNEL);
+	if (!tps)
+		return -ENOMEM;
+
+	tps->desc.name = client->name;
+	tps->desc.id = 0;
+	tps->desc.ops = &tps62360_dcdc_ops;
+	tps->desc.type = REGULATOR_VOLTAGE;
+	tps->desc.owner = THIS_MODULE;
+	tps->desc.uV_step = 10000;
+
+	if (client->dev.of_node) {
+		const struct of_device_id *match;
+		match = of_match_device(of_match_ptr(tps62360_of_match),
+				&client->dev);
+		if (!match) {
+			dev_err(&client->dev, "Error: No device match found\n");
+			return -ENODEV;
+		}
+		chip_id = (int)(long)match->data;
+		if (!pdata)
+			pdata = of_get_tps62360_platform_data(&client->dev,
+							      &tps->desc);
+	} else if (id) {
+		chip_id = id->driver_data;
+	} else {
+		dev_err(&client->dev, "No device tree match or id table match found\n");
+		return -ENODEV;
+	}
+
 	if (!pdata) {
 		dev_err(&client->dev, "%s(): Platform data not found\n",
 						__func__);
 		return -EIO;
-	}
-
-	tps = devm_kzalloc(&client->dev, sizeof(*tps), GFP_KERNEL);
-	if (!tps) {
-		dev_err(&client->dev, "%s(): Memory allocation failed\n",
-						__func__);
-		return -ENOMEM;
 	}
 
 	tps->en_discharge = pdata->en_discharge;
@@ -365,16 +394,16 @@ static int __devinit tps62360_probe(struct i2c_client *client,
 	tps->vsel1_gpio = pdata->vsel1_gpio;
 	tps->dev = &client->dev;
 
-	switch (id->driver_data) {
+	switch (chip_id) {
 	case TPS62360:
 	case TPS62362:
-		tps->voltage_base = TPS62360_BASE_VOLTAGE;
+		tps->desc.min_uV = TPS62360_BASE_VOLTAGE;
 		tps->voltage_reg_mask = 0x3F;
 		tps->desc.n_voltages = TPS62360_N_VOLTAGES;
 		break;
 	case TPS62361:
 	case TPS62363:
-		tps->voltage_base = TPS62361_BASE_VOLTAGE;
+		tps->desc.min_uV = TPS62361_BASE_VOLTAGE;
 		tps->voltage_reg_mask = 0x7F;
 		tps->desc.n_voltages = TPS62361_N_VOLTAGES;
 		break;
@@ -382,11 +411,6 @@ static int __devinit tps62360_probe(struct i2c_client *client,
 		return -ENODEV;
 	}
 
-	tps->desc.name = id->name;
-	tps->desc.id = 0;
-	tps->desc.ops = &tps62360_dcdc_ops;
-	tps->desc.type = REGULATOR_VOLTAGE;
-	tps->desc.owner = THIS_MODULE;
 	tps->regmap = devm_regmap_init_i2c(client, &tps62360_regmap_config);
 	if (IS_ERR(tps->regmap)) {
 		ret = PTR_ERR(tps->regmap);
@@ -406,24 +430,24 @@ static int __devinit tps62360_probe(struct i2c_client *client,
 		int gpio_flags;
 		gpio_flags = (pdata->vsel0_def_state) ?
 				GPIOF_OUT_INIT_HIGH : GPIOF_OUT_INIT_LOW;
-		ret = gpio_request_one(tps->vsel0_gpio,
+		ret = devm_gpio_request_one(&client->dev, tps->vsel0_gpio,
 				gpio_flags, "tps62360-vsel0");
 		if (ret) {
 			dev_err(&client->dev,
 				"%s(): Could not obtain vsel0 GPIO %d: %d\n",
 				__func__, tps->vsel0_gpio, ret);
-			goto err_gpio0;
+			return ret;
 		}
 
 		gpio_flags = (pdata->vsel1_def_state) ?
 				GPIOF_OUT_INIT_HIGH : GPIOF_OUT_INIT_LOW;
-		ret = gpio_request_one(tps->vsel1_gpio,
+		ret = devm_gpio_request_one(&client->dev, tps->vsel1_gpio,
 				gpio_flags, "tps62360-vsel1");
 		if (ret) {
 			dev_err(&client->dev,
 				"%s(): Could not obtain vsel1 GPIO %d: %d\n",
 				__func__, tps->vsel1_gpio, ret);
-			goto err_gpio1;
+			return ret;
 		}
 		tps->valid_gpios = true;
 
@@ -441,50 +465,24 @@ static int __devinit tps62360_probe(struct i2c_client *client,
 	if (ret < 0) {
 		dev_err(tps->dev, "%s(): Init failed with err = %d\n",
 				__func__, ret);
-		goto err_init;
+		return ret;
 	}
 
+	config.dev = &client->dev;
+	config.init_data = pdata->reg_init_data;
+	config.driver_data = tps;
+	config.of_node = client->dev.of_node;
+
 	/* Register the regulators */
-	rdev = regulator_register(&tps->desc, &client->dev,
-				&pdata->reg_init_data, tps);
+	rdev = devm_regulator_register(&client->dev, &tps->desc, &config);
 	if (IS_ERR(rdev)) {
 		dev_err(tps->dev,
 			"%s(): regulator register failed with err %s\n",
 			__func__, id->name);
-		ret = PTR_ERR(rdev);
-		goto err_init;
+		return PTR_ERR(rdev);
 	}
 
 	tps->rdev = rdev;
-	return 0;
-
-err_init:
-	if (gpio_is_valid(tps->vsel1_gpio))
-		gpio_free(tps->vsel1_gpio);
-err_gpio1:
-	if (gpio_is_valid(tps->vsel0_gpio))
-		gpio_free(tps->vsel0_gpio);
-err_gpio0:
-	return ret;
-}
-
-/**
- * tps62360_remove - tps62360 driver i2c remove handler
- * @client: i2c driver client device structure
- *
- * Unregister TPS driver as an i2c client device driver
- */
-static int __devexit tps62360_remove(struct i2c_client *client)
-{
-	struct tps62360_chip *tps = i2c_get_clientdata(client);
-
-	if (gpio_is_valid(tps->vsel1_gpio))
-		gpio_free(tps->vsel1_gpio);
-
-	if (gpio_is_valid(tps->vsel0_gpio))
-		gpio_free(tps->vsel0_gpio);
-
-	regulator_unregister(tps->rdev);
 	return 0;
 }
 
@@ -517,10 +515,9 @@ MODULE_DEVICE_TABLE(i2c, tps62360_id);
 static struct i2c_driver tps62360_i2c_driver = {
 	.driver = {
 		.name = "tps62360",
-		.owner = THIS_MODULE,
+		.of_match_table = of_match_ptr(tps62360_of_match),
 	},
 	.probe = tps62360_probe,
-	.remove = __devexit_p(tps62360_remove),
 	.shutdown = tps62360_shutdown,
 	.id_table = tps62360_id,
 };

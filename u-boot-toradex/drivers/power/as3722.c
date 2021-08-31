@@ -22,12 +22,13 @@
 #define AS3722_LDO_VOLTAGE(n) (0x10 + (n))
 #define AS3722_GPIO_SIGNAL_OUT 0x20
 #define AS3722_SD_CONTROL 0x4d
-#define AS3722_LDO_CONTROL 0x4e
+#define AS3722_LDO_CONTROL0 0x4e
+#define AS3722_LDO_CONTROL1 0x4f
 #define AS3722_ASIC_ID1 0x90
 #define  AS3722_DEVICE_ID 0x0c
 #define AS3722_ASIC_ID2 0x91
 
-static int as3722_read(struct udevice *pmic, u8 reg, u8 *value)
+int as3722_read(struct udevice *pmic, u8 reg, u8 *value)
 {
 	int err;
 
@@ -38,7 +39,7 @@ static int as3722_read(struct udevice *pmic, u8 reg, u8 *value)
 	return 0;
 }
 
-static int as3722_write(struct udevice *pmic, u8 reg, u8 value)
+int as3722_write(struct udevice *pmic, u8 reg, u8 value)
 {
 	int err;
 
@@ -111,13 +112,19 @@ int as3722_sd_set_voltage(struct udevice *pmic, unsigned int sd, u8 value)
 
 int as3722_ldo_enable(struct udevice *pmic, unsigned int ldo)
 {
+	u8 ctrl_reg = AS3722_LDO_CONTROL0;
 	u8 value;
 	int err;
 
 	if (ldo > 11)
 		return -EINVAL;
 
-	err = as3722_read(pmic, AS3722_LDO_CONTROL, &value);
+	if (ldo > 7) {
+		ctrl_reg = AS3722_LDO_CONTROL1;
+		ldo -= 8;
+	}
+
+	err = as3722_read(pmic, ctrl_reg, &value);
 	if (err) {
 		error("failed to read LDO control register: %d", err);
 		return err;
@@ -125,7 +132,7 @@ int as3722_ldo_enable(struct udevice *pmic, unsigned int ldo)
 
 	value |= 1 << ldo;
 
-	err = as3722_write(pmic, AS3722_LDO_CONTROL, value);
+	err = as3722_write(pmic, ctrl_reg, value);
 	if (err < 0) {
 		error("failed to write LDO control register: %d", err);
 		return err;
@@ -234,6 +241,15 @@ int as3722_gpio_direction_output(struct udevice *pmic, unsigned int gpio,
 	return 0;
 }
 
+/* Temporary function until we get the pmic framework */
+int as3722_get(struct udevice **devp)
+{
+	int bus = 0;
+	int address = 0x40;
+
+	return i2c_get_chip_for_busnum(bus, address, 1, devp);
+}
+
 int as3722_init(struct udevice **devp)
 {
 	struct udevice *pmic;
@@ -258,7 +274,8 @@ int as3722_init(struct udevice **devp)
 
 	debug("AS3722 revision %#x found on I2C bus %u, address %#x\n",
 	      revision, bus, address);
-	*devp = pmic;
+	if (devp)
+		*devp = pmic;
 
 	return 0;
 }

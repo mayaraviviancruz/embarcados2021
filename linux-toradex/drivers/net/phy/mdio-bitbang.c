@@ -165,8 +165,11 @@ static int mdiobb_read(struct mii_bus *bus, int phy, int reg)
 
 	ctrl->ops->set_mdio_dir(ctrl, 0);
 
-	/* check the turnaround bit: the PHY should be driving it to zero */
-	if (mdiobb_get_bit(ctrl) != 0) {
+	/* check the turnaround bit: the PHY should be driving it to zero, if this
+	 * PHY is listed in phy_ignore_ta_mask as having broken TA, skip that
+	 */
+	if (mdiobb_get_bit(ctrl) != 0 &&
+	    !(bus->phy_ignore_ta_mask & (1 << phy))) {
 		/* PHY didn't drive TA low -- flush any bits it
 		 * may be trying to send.
 		 */
@@ -202,6 +205,14 @@ static int mdiobb_write(struct mii_bus *bus, int phy, int reg, u16 val)
 	return 0;
 }
 
+static int mdiobb_reset(struct mii_bus *bus)
+{
+	struct mdiobb_ctrl *ctrl = bus->priv;
+	if (ctrl->reset)
+		ctrl->reset(bus);
+	return 0;
+}
+
 struct mii_bus *alloc_mdio_bitbang(struct mdiobb_ctrl *ctrl)
 {
 	struct mii_bus *bus;
@@ -214,6 +225,7 @@ struct mii_bus *alloc_mdio_bitbang(struct mdiobb_ctrl *ctrl)
 
 	bus->read = mdiobb_read;
 	bus->write = mdiobb_write;
+	bus->reset = mdiobb_reset;
 	bus->priv = ctrl;
 
 	return bus;

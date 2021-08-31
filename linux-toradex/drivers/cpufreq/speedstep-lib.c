@@ -249,6 +249,7 @@ EXPORT_SYMBOL_GPL(speedstep_get_frequency);
  *                 DETECT SPEEDSTEP-CAPABLE PROCESSOR                *
  *********************************************************************/
 
+/* Keep in sync with the x86_cpu_id tables in the different modules */
 unsigned int speedstep_detect_processor(void)
 {
 	struct cpuinfo_x86 *c = &cpu_data(0);
@@ -269,9 +270,9 @@ unsigned int speedstep_detect_processor(void)
 		ebx = cpuid_ebx(0x00000001);
 		ebx &= 0x000000FF;
 
-		pr_debug("ebx value is %x, x86_mask is %x\n", ebx, c->x86_mask);
+		pr_debug("ebx value is %x, x86_stepping is %x\n", ebx, c->x86_stepping);
 
-		switch (c->x86_mask) {
+		switch (c->x86_stepping) {
 		case 4:
 			/*
 			 * B-stepping [M-P4-M]
@@ -358,7 +359,7 @@ unsigned int speedstep_detect_processor(void)
 				msr_lo, msr_hi);
 		if ((msr_hi & (1<<18)) &&
 		    (relaxed_check ? 1 : (msr_hi & (3<<24)))) {
-			if (c->x86_mask == 0x01) {
+			if (c->x86_stepping == 0x01) {
 				pr_debug("early PIII version\n");
 				return SPEEDSTEP_CPU_PIII_C_EARLY;
 			} else
@@ -385,7 +386,7 @@ unsigned int speedstep_get_freqs(enum speedstep_processor processor,
 	unsigned int prev_speed;
 	unsigned int ret = 0;
 	unsigned long flags;
-	struct timeval tv1, tv2;
+	ktime_t tv1, tv2;
 
 	if ((!processor) || (!low_speed) || (!high_speed) || (!set_state))
 		return -EINVAL;
@@ -399,6 +400,7 @@ unsigned int speedstep_get_freqs(enum speedstep_processor processor,
 
 	pr_debug("previous speed is %u\n", prev_speed);
 
+	preempt_disable();
 	local_irq_save(flags);
 
 	/* switch to low state */
@@ -413,14 +415,14 @@ unsigned int speedstep_get_freqs(enum speedstep_processor processor,
 
 	/* start latency measurement */
 	if (transition_latency)
-		do_gettimeofday(&tv1);
+		tv1 = ktime_get();
 
 	/* switch to high state */
 	set_state(SPEEDSTEP_HIGH);
 
 	/* end latency measurement */
 	if (transition_latency)
-		do_gettimeofday(&tv2);
+		tv2 = ktime_get();
 
 	*high_speed = speedstep_get_frequency(processor);
 	if (!*high_speed) {
@@ -440,8 +442,7 @@ unsigned int speedstep_get_freqs(enum speedstep_processor processor,
 		set_state(SPEEDSTEP_LOW);
 
 	if (transition_latency) {
-		*transition_latency = (tv2.tv_sec - tv1.tv_sec) * USEC_PER_SEC +
-			tv2.tv_usec - tv1.tv_usec;
+		*transition_latency = ktime_to_us(ktime_sub(tv2, tv1));
 		pr_debug("transition latency is %u uSec\n", *transition_latency);
 
 		/* convert uSec to nSec and add 20% for safety reasons */
@@ -463,6 +464,8 @@ unsigned int speedstep_get_freqs(enum speedstep_processor processor,
 
 out:
 	local_irq_restore(flags);
+	preempt_enable();
+
 	return ret;
 }
 EXPORT_SYMBOL_GPL(speedstep_get_freqs);

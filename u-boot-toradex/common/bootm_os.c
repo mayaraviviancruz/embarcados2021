@@ -288,6 +288,8 @@ void do_bootvx_fdt(bootm_headers_t *images)
 		if (ret)
 			return;
 
+		fdt_fixup_ethernet(*of_flat_tree);
+
 		ret = fdt_add_subnode(*of_flat_tree, 0, "chosen");
 		if ((ret >= 0 || ret == -FDT_ERR_EXISTS)) {
 			bootline = getenv("bootargs");
@@ -471,20 +473,27 @@ __weak void arch_preboot_os(void)
 	/* please define platform specific arch_preboot_os() */
 }
 
+/* Allow for board specific config before we boot */
+__weak void board_preboot_os(void)
+{
+	/* please define board specific board_preboot_os() */
+}
+
 int boot_selected_os(int argc, char * const argv[], int state,
 		     bootm_headers_t *images, boot_os_fn *boot_fn)
 {
+	board_preboot_os();
 	arch_preboot_os();
 	boot_fn(state, argc, argv, images);
 
 	/* Stand-alone may return when 'autostart' is 'no' */
 	if (images->os.type == IH_TYPE_STANDALONE ||
+	    IS_ENABLED(CONFIG_SANDBOX) ||
 	    state == BOOTM_STATE_OS_FAKE_GO) /* We expect to return */
 		return 0;
 	bootstage_error(BOOTSTAGE_ID_BOOT_OS_RETURNED);
-#ifdef DEBUG
-	puts("\n## Control returned to monitor - resetting...\n");
-#endif
+	debug("\n## Control returned to monitor - resetting...\n");
+
 	return BOOTM_ERR_RESET;
 }
 

@@ -9,8 +9,7 @@
 #include <asm/arch/imx-regs.h>
 #include <asm/arch/clock.h>
 #include <asm/arch/crm_regs.h>
-#include <asm/imx-common/boot_mode.h>
-#include <asm/pl310.h>
+#include <asm/imx-common/sys_proto.h>
 #include <netdev.h>
 #ifdef CONFIG_FSL_ESDHC
 #include <fsl_esdhc.h>
@@ -268,6 +267,11 @@ void imx_get_mac_from_fuse(int dev_id, unsigned char *mac)
 }
 #endif
 
+u32 get_cpu_rev(void)
+{
+	return MXC_CPU_VF610 << 12;
+}
+
 #if defined(CONFIG_DISPLAY_CPUINFO)
 static char *get_reset_cause(void)
 {
@@ -312,35 +316,6 @@ int arch_cpu_init(void)
 
 	return 0;
 }
-
-void boot_mode_apply(unsigned cfg_val)
-{
-	unsigned reg;
-	struct src *psrc = (struct src *)SRC_BASE_ADDR;
-	writel(cfg_val, &psrc->hab3);
-	reg = readl(&psrc->hab4);
-	if (cfg_val)
-		reg |= 1 << 28;
-	else
-		reg &= ~(1 << 28);
-	writel(reg, &psrc->hab4);
-}
-
-/*
- * cfg_val will be used for
- * Boot_cfg4[7:0]:Boot_cfg3[7:0]:Boot_cfg2[7:0]:Boot_cfg1[7:0]
- * After reset, if GPR10[28] is 1, ROM will use GPR9[25:0]
- * instead of SBMR1 to determine the boot device.
- */
-const struct boot_mode soc_boot_modes[] = {
-	{"normal",	MAKE_CFGVAL(0x00, 0x00, 0x00, 0x00)},
-	/* reserved value should start ROM's serial loader */
-	{"serial",	MAKE_CFGVAL(0x40, 0x00, 0x00, 0x00)},
-	/* 4 bit bus width */
-	{"esdhc0",	MAKE_CFGVAL(0x60, 0x20, 0x00, 0x00)},
-	{"esdhc1",	MAKE_CFGVAL(0x60, 0x28, 0x00, 0x00)},
-	{NULL,		0},
-};
 
 #ifdef CONFIG_ARCH_MISC_INIT
 int arch_misc_init(void)
@@ -397,38 +372,44 @@ void enable_caches(void)
 }
 #endif
 
-#if !defined(CONFIG_SYS_L2CACHE_OFF) && defined(CONFIG_SYS_L2_PL310)
-#define IOMUXC_GPR11_L2CACHE_AS_OCRAM 0x00000002
-void v7_outer_cache_enable(void)
+#ifdef CONFIG_IMX_BOOTAUX
+#define CCM_CCOWR_START 0x00015a5a
+
+const struct memorymap hostmap[] = {
+	{ .auxcore = 0x00000000, .host = 0x00000000, .size = 0x18000 },
+	{ .auxcore = 0x1f000000, .host = 0x3f000000, .size = 0x80000 },
+	{ .auxcore = 0x1f800000, .host = 0x1f800000, .size = 0x8000 },
+	{ .auxcore = 0x3f000000, .host = 0x3f000000, .size = 0x80000 },
+	{ .auxcore = 0x3f800000, .host = 0x3f800000, .size = 0x8000 },
+	{ .auxcore = 0x00800000, .host = 0x80800000, .size = 0x0f800000 },
+	{ .auxcore = 0x80000000, .host = 0x80000000, .size = 0xe0000000 },
+	{ /* sentinel */ }
+};
+
+/* The Cortex-M4 starts from the address present in SRC_GPR2 */
+int arch_auxiliary_core_up(u32 core_id, u32 stack, u32 pc)
 {
-	struct pl310_regs *const pl310 = (struct pl310_regs *)CA5_L2C_BASE_ADDR;
-	unsigned int val;
+	struct src *src = (struct src *)SRC_BASE_ADDR;
+	struct ccm_reg *ccm = (struct ccm_reg *)CCM_BASE_ADDR;
 
-	/* Must disable the L2 before changing the latency parameters */
-	clrbits_le32(&pl310->pl310_ctrl, L2X0_CTRL_EN);
+	/* Set the PC for the Cortex-M4 */
+	writel(pc, &src->gpr2);
 
-	writel(0x122, &pl310->pl310_tag_latency_ctrl);
-	writel(0x011, &pl310->pl310_data_latency_ctrl);
+	/* Enable M4 */
+	writel(CCM_CCOWR_START, &ccm->ccowr);
 
-	val = readl(&pl310->pl310_prefetch_ctrl);
-
-	/* Turn on the L2 I/D prefetch */
-	val |= 0x30000000;
-
-	writel(val, &pl310->pl310_prefetch_ctrl);
-
-	val = readl(&pl310->pl310_power_ctrl);
-	val |= L2X0_DYNAMIC_CLK_GATING_EN;
-	val |= L2X0_STNDBY_MODE_EN;
-	writel(val, &pl310->pl310_power_ctrl);
-
-	setbits_le32(&pl310->pl310_ctrl, L2X0_CTRL_EN);
+	return 0;
 }
 
-void v7_outer_cache_disable(void)
+int arch_auxiliary_core_check_up(u32 core_id)
 {
-	struct pl310_regs *const pl310 = (struct pl310_regs *)CA5_L2C_BASE_ADDR;
+	uint32_t val;
+	struct ccm_reg *ccm = (struct ccm_reg *)CCM_BASE_ADDR;
 
-	clrbits_le32(&pl310->pl310_ctrl, L2X0_CTRL_EN);
+	val = readl(&ccm->ccowr);
+	if (val & 0x00010000)
+		return 1;
+
+	return 0;
 }
-#endif /* !CONFIG_SYS_L2CACHE_OFF */
+#endif

@@ -36,6 +36,7 @@
 #include <linux/pci.h>
 #include <linux/errno.h>
 #include <linux/sched.h>
+#include <linux/module.h>
 #include <linux/slab.h>
 #include <asm/io.h>
 #include <rdma/ib_mad.h>
@@ -1857,8 +1858,8 @@ int mthca_CONF_SPECIAL_QP(struct mthca_dev *dev, int type, u32 qpn)
 }
 
 int mthca_MAD_IFC(struct mthca_dev *dev, int ignore_mkey, int ignore_bkey,
-		  int port, struct ib_wc *in_wc, struct ib_grh *in_grh,
-		  void *in_mad, void *response_mad)
+		  int port, const struct ib_wc *in_wc, const struct ib_grh *in_grh,
+		  const void *in_mad, void *response_mad)
 {
 	struct mthca_mailbox *inmailbox, *outmailbox;
 	void *inbox;

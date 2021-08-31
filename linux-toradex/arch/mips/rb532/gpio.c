@@ -29,6 +29,7 @@
 #include <linux/kernel.h>
 #include <linux/init.h>
 #include <linux/types.h>
+#include <linux/export.h>
 #include <linux/spinlock.h>
 #include <linux/platform_device.h>
 #include <linux/gpio.h>
@@ -43,10 +44,10 @@ struct rb532_gpio_chip {
 
 static struct resource rb532_gpio_reg0_res[] = {
 	{
-		.name 	= "gpio_reg0",
-		.start 	= REGBASE + GPIOBASE,
-		.end 	= REGBASE + GPIOBASE + sizeof(struct rb532_gpio_reg) - 1,
-		.flags 	= IORESOURCE_MEM,
+		.name	= "gpio_reg0",
+		.start	= REGBASE + GPIOBASE,
+		.end	= REGBASE + GPIOBASE + sizeof(struct rb532_gpio_reg) - 1,
+		.flags	= IORESOURCE_MEM,
 	}
 };
 
@@ -78,7 +79,7 @@ static inline void rb532_set_bit(unsigned bitval,
  */
 static inline int rb532_get_bit(unsigned offset, void __iomem *ioaddr)
 {
-	return (readl(ioaddr) & (1 << offset));
+	return readl(ioaddr) & (1 << offset);
 }
 
 /*
@@ -139,6 +140,11 @@ static int rb532_gpio_direction_output(struct gpio_chip *chip,
 	return 0;
 }
 
+static int rb532_gpio_to_irq(struct gpio_chip *chip, unsigned gpio)
+{
+	return 8 + 4 * 32 + gpio;
+}
+
 static struct rb532_gpio_chip rb532_gpio_chip[] = {
 	[0] = {
 		.chip = {
@@ -147,6 +153,7 @@ static struct rb532_gpio_chip rb532_gpio_chip[] = {
 			.direction_output	= rb532_gpio_direction_output,
 			.get			= rb532_gpio_get,
 			.set			= rb532_gpio_set,
+			.to_irq			= rb532_gpio_to_irq,
 			.base			= 0,
 			.ngpio			= 32,
 		},

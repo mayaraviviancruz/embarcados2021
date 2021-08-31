@@ -27,7 +27,6 @@
 #include <linux/device.h>
 #include <linux/errno.h>
 #include <linux/firmware.h>
-#include <linux/init.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/moduleparam.h>
@@ -73,9 +72,9 @@ static const char speedtch_driver_name[] = "speedtch";
 #define DEFAULT_SW_BUFFERING	0
 
 static unsigned int altsetting = 0; /* zero means: use the default */
-static int dl_512_first = DEFAULT_DL_512_FIRST;
-static int enable_isoc = DEFAULT_ENABLE_ISOC;
-static int sw_buffering = DEFAULT_SW_BUFFERING;
+static bool dl_512_first = DEFAULT_DL_512_FIRST;
+static bool enable_isoc = DEFAULT_ENABLE_ISOC;
+static bool sw_buffering = DEFAULT_SW_BUFFERING;
 
 #define DEFAULT_B_MAX_DSL	8128
 #define DEFAULT_MODEM_MODE	11
@@ -170,7 +169,7 @@ static void speedtch_set_swbuff(struct speedtch_instance_data *instance, int sta
 			 "%sabling SW buffering: usb_control_msg returned %d\n",
 			 state ? "En" : "Dis", ret);
 	else
-		dbg("speedtch_set_swbuff: %sbled SW buffering", state ? "En" : "Dis");
+		usb_dbg(usbatm, "speedtch_set_swbuff: %sbled SW buffering\n", state ? "En" : "Dis");
 }
 
 static void speedtch_test_sequence(struct speedtch_instance_data *instance)
@@ -256,7 +255,8 @@ static int speedtch_upload_firmware(struct speedtch_instance_data *instance,
 
 	usb_dbg(usbatm, "%s entered\n", __func__);
 
-	if (!(buffer = (unsigned char *)__get_free_page(GFP_KERNEL))) {
+	buffer = (unsigned char *)__get_free_page(GFP_KERNEL);
+	if (!buffer) {
 		ret = -ENOMEM;
 		usb_dbg(usbatm, "%s: no memory for buffer!\n", __func__);
 		goto out;
@@ -639,7 +639,8 @@ static void speedtch_handle_int(struct urb *int_urb)
 		goto fail;
 	}
 
-	if ((int_urb = instance->int_urb)) {
+	int_urb = instance->int_urb;
+	if (int_urb) {
 		ret = usb_submit_urb(int_urb, GFP_ATOMIC);
 		schedule_work(&instance->status_check_work);
 		if (ret < 0) {
@@ -651,7 +652,8 @@ static void speedtch_handle_int(struct urb *int_urb)
 	return;
 
 fail:
-	if ((int_urb = instance->int_urb))
+	int_urb = instance->int_urb;
+	if (int_urb)
 		mod_timer(&instance->resubmit_timer, jiffies + msecs_to_jiffies(RESUBMIT_DELAY));
 }
 
@@ -718,7 +720,7 @@ static void speedtch_atm_stop(struct usbatm_data *usbatm, struct atm_dev *atm_de
 	del_timer_sync(&instance->resubmit_timer);
 	usb_free_urb(int_urb);
 
-	flush_work_sync(&instance->status_check_work);
+	flush_work(&instance->status_check_work);
 }
 
 static int speedtch_pre_reset(struct usb_interface *intf)
@@ -760,11 +762,13 @@ static void speedtch_release_interfaces(struct usb_device *usb_dev,
 	struct usb_interface *cur_intf;
 	int i;
 
-	for (i = 0; i < num_interfaces; i++)
-		if ((cur_intf = usb_ifnum_to_if(usb_dev, i))) {
+	for (i = 0; i < num_interfaces; i++) {
+		cur_intf = usb_ifnum_to_if(usb_dev, i);
+		if (cur_intf) {
 			usb_set_intfdata(cur_intf, NULL);
 			usb_driver_release_interface(&speedtch_usb_driver, cur_intf);
 		}
+	}
 }
 
 static int speedtch_bind(struct usbatm_data *usbatm,
@@ -788,7 +792,8 @@ static int speedtch_bind(struct usbatm_data *usbatm,
 		return -ENODEV;
 	}
 
-	if (!(data_intf = usb_ifnum_to_if(usb_dev, INTERFACE_DATA))) {
+	data_intf = usb_ifnum_to_if(usb_dev, INTERFACE_DATA);
+	if (!data_intf) {
 		usb_err(usbatm, "%s: data interface not found!\n", __func__);
 		return -ENODEV;
 	}
@@ -888,7 +893,7 @@ static int speedtch_bind(struct usbatm_data *usbatm,
 		usb_fill_int_urb(instance->int_urb, usb_dev,
 				 usb_rcvintpipe(usb_dev, ENDPOINT_INT),
 				 instance->int_data, sizeof(instance->int_data),
-				 speedtch_handle_int, instance, 50);
+				 speedtch_handle_int, instance, 16);
 	else
 		usb_dbg(usbatm, "%s: no memory for interrupt urb!\n", __func__);
 
@@ -953,22 +958,7 @@ static int speedtch_usb_probe(struct usb_interface *intf, const struct usb_devic
 	return usbatm_usb_probe(intf, id, &speedtch_usbatm_driver);
 }
 
-static int __init speedtch_usb_init(void)
-{
-	dbg("%s: driver version %s", __func__, DRIVER_VERSION);
-
-	return usb_register(&speedtch_usb_driver);
-}
-
-static void __exit speedtch_usb_cleanup(void)
-{
-	dbg("%s", __func__);
-
-	usb_deregister(&speedtch_usb_driver);
-}
-
-module_init(speedtch_usb_init);
-module_exit(speedtch_usb_cleanup);
+module_usb_driver(speedtch_usb_driver);
 
 MODULE_AUTHOR(DRIVER_AUTHOR);
 MODULE_DESCRIPTION(DRIVER_DESC);

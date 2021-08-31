@@ -23,26 +23,39 @@
 #include <asm/ptrace.h>
 
 #ifdef CONFIG_HW_PERF_EVENTS
+
+/*
+ * OProfile has a curious naming scheme for the ARM PMUs, but they are
+ * part of the user ABI so we need to map from the perf PMU name for
+ * supported PMUs.
+ */
+static struct op_perf_name {
+	char *perf_name;
+	char *op_name;
+} op_perf_name_map[] = {
+	{ "armv5_xscale1",	"arm/xscale1"	},
+	{ "armv5_xscale2",	"arm/xscale2"	},
+	{ "armv6_1136",		"arm/armv6"	},
+	{ "armv6_1156",		"arm/armv6"	},
+	{ "armv6_1176",		"arm/armv6"	},
+	{ "armv6_11mpcore",	"arm/mpcore"	},
+	{ "armv7_cortex_a8",	"arm/armv7"	},
+	{ "armv7_cortex_a9",	"arm/armv7-ca9"	},
+};
+
 char *op_name_from_perf_id(void)
 {
-	enum arm_perf_pmu_ids id = armpmu_get_pmu_id();
+	int i;
+	struct op_perf_name names;
+	const char *perf_name = perf_pmu_name();
 
-	switch (id) {
-	case ARM_PERF_PMU_ID_XSCALE1:
-		return "arm/xscale1";
-	case ARM_PERF_PMU_ID_XSCALE2:
-		return "arm/xscale2";
-	case ARM_PERF_PMU_ID_V6:
-		return "arm/armv6";
-	case ARM_PERF_PMU_ID_V6MP:
-		return "arm/mpcore";
-	case ARM_PERF_PMU_ID_CA8:
-		return "arm/armv7";
-	case ARM_PERF_PMU_ID_CA9:
-		return "arm/armv7-ca9";
-	default:
-		return NULL;
+	for (i = 0; i < ARRAY_SIZE(op_perf_name_map); ++i) {
+		names = op_perf_name_map[i];
+		if (!strcmp(names.perf_name, perf_name))
+			return names.op_name;
 	}
+
+	return NULL;
 }
 #endif
 
@@ -58,13 +71,6 @@ static int report_trace(struct stackframe *frame, void *d)
 	return *depth == 0;
 }
 
-#ifdef CONFIG_ANDROID
-/* Android has a different stack frame than Linux */
-struct frame_tail {
-	unsigned long fp;
-	unsigned long lr;
-} __attribute__((packed));
-#else
 /*
  * The registers we're interested in are at the end of the variable
  * length saved register structure. The fp points at the end of this
@@ -76,7 +82,6 @@ struct frame_tail {
 	unsigned long sp;
 	unsigned long lr;
 } __attribute__((packed));
-#endif
 
 static struct frame_tail* user_backtrace(struct frame_tail *tail)
 {
@@ -92,36 +97,19 @@ static struct frame_tail* user_backtrace(struct frame_tail *tail)
 
 	/* frame pointers should strictly progress back up the stack
 	 * (towards higher addresses) */
-#ifdef CONFIG_ANDROID
-	if (tail >= (struct frame_tail *) buftail[0].fp)
-#else
 	if (tail + 1 >= buftail[0].fp)
-#endif
 		return NULL;
 
-#ifdef CONFIG_ANDROID
-	/* Android has a different stack frame than Linux */
-	return (struct frame_tail *) (buftail[0].fp - sizeof(unsigned long));
-#else
 	return buftail[0].fp-1;
-#endif
 }
 
 static void arm_backtrace(struct pt_regs * const regs, unsigned int depth)
 {
-#ifdef CONFIG_ANDROID
-	struct frame_tail *tail = (struct frame_tail *)
-	                          (regs->ARM_fp - sizeof(unsigned long));
-#else
 	struct frame_tail *tail = ((struct frame_tail *) regs->ARM_fp) - 1;
-#endif
 
 	if (!user_mode(regs)) {
 		struct stackframe frame;
-		frame.fp = regs->ARM_fp;
-		frame.sp = regs->ARM_sp;
-		frame.lr = regs->ARM_lr;
-		frame.pc = regs->ARM_pc;
+		arm_get_current_stackframe(regs, &frame);
 		walk_stackframe(&frame, report_trace, &depth);
 		return;
 	}

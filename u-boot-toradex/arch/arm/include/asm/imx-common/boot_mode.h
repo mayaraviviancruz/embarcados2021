@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2015 Boundary Devices Inc.
+ * Copyright (C) 2012 Boundary Devices Inc.
  *
  * SPDX-License-Identifier:	GPL-2.0+
  */
@@ -26,6 +26,7 @@ enum boot_device {
 	MMC4_BOOT,
 	NAND_BOOT,
 	QSPI_BOOT,
+	USB_SDP_BOOT,
 	UNKNOWN_BOOT,
 	BOOT_DEV_NUM = UNKNOWN_BOOT,
 };
@@ -37,6 +38,5 @@ struct boot_mode {
 
 void add_board_boot_modes(const struct boot_mode *p);
 void boot_mode_apply(unsigned cfg_val);
-enum boot_device get_boot_device(void);
 extern const struct boot_mode soc_boot_modes[];
 #endif

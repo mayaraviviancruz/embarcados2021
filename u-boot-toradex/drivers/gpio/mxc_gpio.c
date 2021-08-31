@@ -14,11 +14,6 @@
 #include <asm/arch/imx-regs.h>
 #include <asm/gpio.h>
 #include <asm/io.h>
-#include <errno.h>
-#ifdef CONFIG_MXC_RDC
-#include <asm/imx-common/rdc-sema.h>
-#include <asm/arch/imx-rdc.h>
-#endif
 
 enum mxc_gpio_direction {
 	MXC_GPIO_DIRECTION_IN,
@@ -52,37 +47,16 @@ static unsigned long gpio_ports[] = {
 #if defined(CONFIG_MX27) || defined(CONFIG_MX53) || defined(CONFIG_MX6) || \
 		defined(CONFIG_MX7)
 	[4] = GPIO5_BASE_ADDR,
-#if !defined(CONFIG_MX6UL)
+#ifndef CONFIG_MX6UL
 	[5] = GPIO6_BASE_ADDR,
 #endif
 #endif
 #if defined(CONFIG_MX53) || defined(CONFIG_MX6) || defined(CONFIG_MX7)
-#if !defined(CONFIG_MX6UL)
+#ifndef CONFIG_MX6UL
 	[6] = GPIO7_BASE_ADDR,
 #endif
 #endif
 };
-
-#ifdef CONFIG_MXC_RDC
-static unsigned int gpio_rdc[] = {
-	RDC_PER_GPIO1,
-	RDC_PER_GPIO2,
-	RDC_PER_GPIO3,
-	RDC_PER_GPIO4,
-	RDC_PER_GPIO5,
-	RDC_PER_GPIO6,
-	RDC_PER_GPIO7,
-};
-
-#define RDC_CHECK(x) imx_rdc_check_permission(gpio_rdc[x])
-#define RDC_SPINLOCK_UP(x) imx_rdc_sema_lock(gpio_rdc[x])
-#define RDC_SPINLOCK_DOWN(x) imx_rdc_sema_unlock(gpio_rdc[x])
-#else
-#define RDC_CHECK(x) 0
-#define RDC_SPINLOCK_UP(x)
-#define RDC_SPINLOCK_DOWN(x)
-#endif
-
 
 static int mxc_gpio_direction(unsigned int gpio,
 	enum mxc_gpio_direction direction)
@@ -93,11 +67,6 @@ static int mxc_gpio_direction(unsigned int gpio,
 
 	if (port >= ARRAY_SIZE(gpio_ports))
 		return -1;
-
-	if (RDC_CHECK(port))
-		return -1;
-
-	RDC_SPINLOCK_UP(port);
 
 	gpio &= 0x1f;
 
@@ -114,8 +83,6 @@ static int mxc_gpio_direction(unsigned int gpio,
 	}
 	writel(l, &regs->gpio_dir);
 
-	RDC_SPINLOCK_DOWN(port);
-
 	return 0;
 }
 
@@ -128,11 +95,6 @@ int gpio_set_value(unsigned gpio, int value)
 	if (port >= ARRAY_SIZE(gpio_ports))
 		return -1;
 
-	if (RDC_CHECK(port))
-		return -1;
-
-	RDC_SPINLOCK_UP(port);
-
 	gpio &= 0x1f;
 
 	regs = (struct gpio_regs *)gpio_ports[port];
@@ -143,8 +105,6 @@ int gpio_set_value(unsigned gpio, int value)
 	else
 		l &= ~(1 << gpio);
 	writel(l, &regs->gpio_dr);
-
-	RDC_SPINLOCK_DOWN(port);
 
 	return 0;
 }
@@ -158,18 +118,11 @@ int gpio_get_value(unsigned gpio)
 	if (port >= ARRAY_SIZE(gpio_ports))
 		return -1;
 
-	if (RDC_CHECK(port))
-		return -1;
-
-	RDC_SPINLOCK_UP(port);
-
 	gpio &= 0x1f;
 
 	regs = (struct gpio_regs *)gpio_ports[port];
 
 	val = (readl(&regs->gpio_psr) >> gpio) & 0x01;
-
-	RDC_SPINLOCK_DOWN(port);
 
 	return val;
 }
@@ -179,10 +132,6 @@ int gpio_request(unsigned gpio, const char *label)
 	unsigned int port = GPIO_TO_PORT(gpio);
 	if (port >= ARRAY_SIZE(gpio_ports))
 		return -1;
-
-	if (RDC_CHECK(port))
-		return -1;
-
 	return 0;
 }
 
@@ -323,7 +272,7 @@ static int mxc_gpio_probe(struct udevice *dev)
 {
 	struct mxc_bank_info *bank = dev_get_priv(dev);
 	struct mxc_gpio_plat *plat = dev_get_platdata(dev);
-	struct gpio_dev_priv *uc_priv = dev->uclass_priv;
+	struct gpio_dev_priv *uc_priv = dev_get_uclass_priv(dev);
 	int banknum;
 	char name[18], *str;
 
@@ -389,7 +338,7 @@ U_BOOT_DRIVER(gpio_mxc) = {
 	.bind	= mxc_gpio_bind,
 };
 
-#ifndef CONFIG_OF_CONTROL
+#if !CONFIG_IS_ENABLED(OF_CONTROL)
 static const struct mxc_gpio_plat mxc_plat[] = {
 	{ 0, (struct gpio_regs *)GPIO1_BASE_ADDR },
 	{ 1, (struct gpio_regs *)GPIO2_BASE_ADDR },

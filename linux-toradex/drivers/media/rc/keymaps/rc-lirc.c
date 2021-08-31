@@ -10,6 +10,7 @@
  */
 
 #include <media/rc-core.h>
+#include <linux/module.h>
 
 static struct rc_map_table lirc[] = {
 	{ },
@@ -19,7 +20,7 @@ static struct rc_map_list lirc_map = {
 	.map = {
 		.scan    = lirc,
 		.size    = ARRAY_SIZE(lirc),
-		.rc_type = RC_TYPE_LIRC,
+		.rc_type = RC_TYPE_OTHER,
 		.name    = RC_MAP_LIRC,
 	}
 };

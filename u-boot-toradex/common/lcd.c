@@ -15,6 +15,7 @@
 #include <linux/types.h>
 #include <stdio_dev.h>
 #include <lcd.h>
+#include <mapmem.h>
 #include <watchdog.h>
 #include <asm/unaligned.h>
 #include <splash.h>
@@ -30,12 +31,13 @@
 #endif
 #endif
 
-#ifdef CONFIG_SANDBOX
-#include <asm/sdl.h>
-#endif
-
 #ifndef CONFIG_LCD_ALIGNMENT
 #define CONFIG_LCD_ALIGNMENT PAGE_SIZE
+#endif
+
+#if (LCD_BPP != LCD_COLOR8) && (LCD_BPP != LCD_COLOR16) && \
+	(LCD_BPP != LCD_COLOR32)
+#error Unsupported LCD BPP.
 #endif
 
 DECLARE_GLOBAL_DATA_PTR;
@@ -64,15 +66,8 @@ void lcd_sync(void)
 	int line_length;
 
 	if (lcd_flush_dcache)
-		flush_dcache_range((u32)lcd_base,
-			(u32)(lcd_base + lcd_get_size(&line_length)));
-#elif defined(CONFIG_SANDBOX) && defined(CONFIG_VIDEO_SANDBOX_SDL)
-	static ulong last_sync;
-
-	if (get_timer(last_sync) > 10) {
-		sandbox_sdl_sync(lcd_base);
-		last_sync = get_timer(0);
-	}
+		flush_dcache_range((ulong)lcd_base,
+			(ulong)(lcd_base + lcd_get_size(&line_length)));
 #endif
 }
 
@@ -94,13 +89,24 @@ static void lcd_stub_puts(struct stdio_dev *dev, const char *s)
 /* Small utility to check that you got the colours right */
 #ifdef LCD_TEST_PATTERN
 
+#if LCD_BPP == LCD_COLOR8
 #define	N_BLK_VERT	2
 #define	N_BLK_HOR	3
 
 static int test_colors[N_BLK_HOR * N_BLK_VERT] = {
 	CONSOLE_COLOR_RED,	CONSOLE_COLOR_GREEN,	CONSOLE_COLOR_YELLOW,
 	CONSOLE_COLOR_BLUE,	CONSOLE_COLOR_MAGENTA,	CONSOLE_COLOR_CYAN,
+}; /*LCD_BPP == LCD_COLOR8 */
+
+#elif LCD_BPP == LCD_COLOR16
+#define	N_BLK_VERT	2
+#define	N_BLK_HOR	4
+
+static int test_colors[N_BLK_HOR * N_BLK_VERT] = {
+	CONSOLE_COLOR_RED,	CONSOLE_COLOR_GREEN,	CONSOLE_COLOR_YELLOW,	CONSOLE_COLOR_BLUE,
+	CONSOLE_COLOR_MAGENTA,	CONSOLE_COLOR_CYAN,	CONSOLE_COLOR_GREY,	CONSOLE_COLOR_WHITE,
 };
+#endif /*LCD_BPP == LCD_COLOR16 */
 
 static void test_pattern(void)
 {
@@ -109,12 +115,15 @@ static void test_pattern(void)
 	ushort v_step = (v_max + N_BLK_VERT - 1) / N_BLK_VERT;
 	ushort h_step = (h_max + N_BLK_HOR  - 1) / N_BLK_HOR;
 	ushort v, h;
+#if LCD_BPP == LCD_COLOR8
 	uchar *pix = (uchar *)lcd_base;
+#elif LCD_BPP == LCD_COLOR16
+	ushort *pix = (ushort *)lcd_base;
+#endif
 
 	printf("[LCD] Test Pattern: %d x %d [%d x %d]\n",
 		h_max, v_max, h_step, v_step);
 
-	/* WARNING: Code silently assumes 8bit/pixel */
 	for (v = 0; v < v_max; ++v) {
 		uchar iy = v / v_step;
 		for (h = 0; h < h_max; ++h) {
@@ -162,15 +171,11 @@ int drv_lcd_init(void)
 
 void lcd_clear(void)
 {
-	short console_rows, console_cols;
+	int bg_color;
 	char *s;
 	ulong addr;
 	static int do_splash = 1;
-#if LCD_BPP == LCD_MONOCHROME
-	/* Setting the palette */
-	lcd_initcolregs();
-
-#elif LCD_BPP == LCD_COLOR8
+#if LCD_BPP == LCD_COLOR8
 	/* Setting the palette */
 	lcd_setcolreg(CONSOLE_COLOR_BLACK, 0, 0, 0);
 	lcd_setcolreg(CONSOLE_COLOR_RED, 0xFF, 0, 0);
@@ -186,9 +191,11 @@ void lcd_clear(void)
 #ifndef CONFIG_SYS_WHITE_ON_BLACK
 	lcd_setfgcolor(CONSOLE_COLOR_BLACK);
 	lcd_setbgcolor(CONSOLE_COLOR_WHITE);
+	bg_color = CONSOLE_COLOR_WHITE;
 #else
 	lcd_setfgcolor(CONSOLE_COLOR_WHITE);
 	lcd_setbgcolor(CONSOLE_COLOR_BLACK);
+	bg_color = CONSOLE_COLOR_BLACK;
 #endif	/* CONFIG_SYS_WHITE_ON_BLACK */
 
 #ifdef	LCD_TEST_PATTERN
@@ -196,28 +203,25 @@ void lcd_clear(void)
 #else
 	/* set framebuffer to background color */
 #if (LCD_BPP != LCD_COLOR32)
-	memset((char *)lcd_base, COLOR_MASK(lcd_getbgcolor()),
-	       lcd_line_length * panel_info.vl_row);
+	memset((char *)lcd_base, bg_color, lcd_line_length * panel_info.vl_row);
 #else
 	u32 *ppix = lcd_base;
 	u32 i;
 	for (i = 0;
 	   i < (lcd_line_length * panel_info.vl_row)/NBYTES(panel_info.vl_bpix);
 	   i++) {
-		*ppix++ = COLOR_MASK(lcd_getbgcolor());
+		*ppix++ = bg_color;
 	}
 #endif
 #endif
+	/* setup text-console */
+	debug("[LCD] setting up console...\n");
+	lcd_init_console(lcd_base,
+			 panel_info.vl_col,
+			 panel_info.vl_row,
+			 panel_info.vl_rot);
 	/* Paint the logo and retrieve LCD base address */
 	debug("[LCD] Drawing the logo...\n");
-#if defined(CONFIG_LCD_LOGO) && !defined(CONFIG_LCD_INFO_BELOW_LOGO)
-	console_rows = (panel_info.vl_row - BMP_LOGO_HEIGHT);
-	console_rows /= VIDEO_FONT_HEIGHT;
-#else
-	console_rows = panel_info.vl_row / VIDEO_FONT_HEIGHT;
-#endif
-	console_cols = panel_info.vl_col / VIDEO_FONT_WIDTH;
-	lcd_init_console(lcd_base, console_rows, console_cols);
 	if (do_splash) {
 		s = getenv("splashimage");
 		if (s) {
@@ -233,7 +237,8 @@ void lcd_clear(void)
 	lcd_logo();
 #if defined(CONFIG_LCD_LOGO) && !defined(CONFIG_LCD_INFO_BELOW_LOGO)
 	addr = (ulong)lcd_base + BMP_LOGO_HEIGHT * lcd_line_length;
-	lcd_init_console((void *)addr, console_rows, console_cols);
+	lcd_init_console((void *)addr, panel_info.vl_col,
+			 panel_info.vl_row, panel_info.vl_rot);
 #endif
 	lcd_sync();
 }
@@ -290,7 +295,7 @@ ulong lcd_setmem(ulong addr)
 	ulong size;
 	int line_length;
 
-	debug("LCD panel info: %u x %u, %d bit/pix\n", panel_info.vl_col,
+	debug("LCD panel info: %d x %d, %d bit/pix\n", panel_info.vl_col,
 		panel_info.vl_row, NBITS(panel_info.vl_bpix));
 
 	size = lcd_get_size(&line_length);
@@ -446,8 +451,8 @@ static void draw_encoded_bitmap(ushort **fbp, ushort c, int cnt)
 /*
  * Do not call this function directly, must be called from lcd_display_bitmap.
  */
-static void lcd_display_rle8_bitmap(bmp_image_t *bmp, ushort *cmap, uchar *fb,
-				    int x_off, int y_off)
+static void lcd_display_rle8_bitmap(struct bmp_image *bmp, ushort *cmap,
+				    uchar *fb, int x_off, int y_off)
 {
 	uchar *bmap;
 	ulong width, height;
@@ -546,10 +551,10 @@ __weak void fb_put_word(uchar **fb, uchar **from)
 }
 #endif /* CONFIG_BMP_16BPP */
 
-__weak void lcd_set_cmap(bmp_image_t *bmp, unsigned colors)
+__weak void lcd_set_cmap(struct bmp_image *bmp, unsigned colors)
 {
 	int i;
-	bmp_color_table_entry_t cte;
+	struct bmp_color_table_entry cte;
 	ushort *cmap = configuration_get_cmap();
 
 	for (i = 0; i < colors; ++i) {
@@ -570,12 +575,14 @@ int lcd_display_bitmap(ulong bmp_image, int x, int y)
 	ushort *cmap_base = NULL;
 	ushort i, j;
 	uchar *fb;
-	bmp_image_t *bmp = (bmp_image_t *)map_sysmem(bmp_image, 0);
+	struct bmp_image *bmp = (struct bmp_image *)map_sysmem(bmp_image, 0);
 	uchar *bmap;
 	ushort padded_width;
 	unsigned long width, height, byte_width;
 	unsigned long pwidth = panel_info.vl_col;
 	unsigned colors, bpix, bmp_bpix;
+	int hdr_size;
+	struct bmp_color_table_entry *palette = bmp->color_table;
 
 	if (!bmp || !(bmp->header.signature[0] == 'B' &&
 		bmp->header.signature[1] == 'M')) {
@@ -587,6 +594,8 @@ int lcd_display_bitmap(ulong bmp_image, int x, int y)
 	width = get_unaligned_le32(&bmp->header.width);
 	height = get_unaligned_le32(&bmp->header.height);
 	bmp_bpix = get_unaligned_le16(&bmp->header.bit_count);
+	hdr_size = get_unaligned_le16(&bmp->header.size);
+	debug("hdr_size=%d, bmp_bpix=%d\n", hdr_size, bmp_bpix);
 
 	colors = 1 << bmp_bpix;
 
@@ -611,8 +620,8 @@ int lcd_display_bitmap(ulong bmp_image, int x, int y)
 		return 1;
 	}
 
-	debug("Display-bmp: %d x %d  with %d colors\n",
-		(int)width, (int)height, (int)colors);
+	debug("Display-bmp: %d x %d  with %d colors, display %d\n",
+	      (int)width, (int)height, (int)colors, 1 << bpix);
 
 	if (bmp_bpix == 8)
 		lcd_set_cmap(bmp, colors);
@@ -639,6 +648,7 @@ int lcd_display_bitmap(ulong bmp_image, int x, int y)
 		cmap_base = configuration_get_cmap();
 #ifdef CONFIG_LCD_BMP_RLE8
 		u32 compression = get_unaligned_le32(&bmp->header.compression);
+		debug("compressed %d %d\n", compression, BMP_BI_RLE8);
 		if (compression == BMP_BI_RLE8) {
 			if (bpix != 16) {
 				/* TODO implement render code for bpix != 16 */
@@ -661,7 +671,19 @@ int lcd_display_bitmap(ulong bmp_image, int x, int y)
 				if (bpix != 16) {
 					fb_put_byte(&fb, &bmap);
 				} else {
-					*(uint16_t *)fb = cmap_base[*(bmap++)];
+					struct bmp_color_table_entry *entry;
+					uint val;
+
+					if (cmap_base) {
+						val = cmap_base[*bmap];
+					} else {
+						entry = &palette[*bmap];
+						val = entry->blue >> 3 |
+							entry->green >> 2 << 5 |
+							entry->red >> 3 << 11;
+					}
+					*(uint16_t *)fb = val;
+					bmap++;
 					fb += sizeof(uint16_t) / sizeof(*fb);
 				}
 			}

@@ -45,7 +45,6 @@ typedef __UINT64_TYPE__ u64;
 #endif
 
 #define BITS_PER_LONG 32
-
 /* Dma addresses are 32-bits wide.  */
 
 typedef u32 dma_addr_t;

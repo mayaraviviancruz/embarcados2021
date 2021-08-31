@@ -59,6 +59,7 @@ pages_do_alias(unsigned long addr1, unsigned long addr2)
 
 #define clear_page(page)	memset((void *)(page), 0, PAGE_SIZE)
 extern void copy_page(void *to, void *from);
+#define copy_user_page(to, from, vaddr, pg)  __copy_user(to, from, PAGE_SIZE)
 
 struct page;
 struct vm_area_struct;
@@ -111,6 +112,16 @@ typedef struct page *pgtable_t;
  */
 #define __MEMORY_START		CONFIG_MEMORY_START
 #define __MEMORY_SIZE		CONFIG_MEMORY_SIZE
+
+/*
+ * PHYSICAL_OFFSET is the offset in physical memory where the base
+ * of the kernel is loaded.
+ */
+#ifdef CONFIG_PHYSICAL_START
+#define PHYSICAL_OFFSET (CONFIG_PHYSICAL_START - __MEMORY_START)
+#else
+#define PHYSICAL_OFFSET 0
+#endif
 
 /*
  * PAGE_OFFSET is the virtual address of the start of kernel address
@@ -175,11 +186,6 @@ typedef struct page *pgtable_t;
 
 #include <asm-generic/memory_model.h>
 #include <asm-generic/getorder.h>
-
-/* vDSO support */
-#ifdef CONFIG_VSYSCALL
-#define __HAVE_ARCH_GATE_AREA
-#endif
 
 /*
  * Some drivers need to perform DMA into kmalloc'ed buffers

@@ -9,20 +9,22 @@ config SYS_VENDOR
 config SYS_CONFIG_NAME
 	default "colibri_t30"
 
-config TRDX_CFG_BLOCK
+config TDX_CFG_BLOCK
 	default y
 
-config TRDX_HAVE_MMC
+config TDX_HAVE_MMC
 	default y
 
-config TRDX_CFG_BLOCK_DEV
+config TDX_CFG_BLOCK_DEV
 	default "0"
 
-config TRDX_CFG_BLOCK_PART
+config TDX_CFG_BLOCK_PART
 	default "1"
 
-# Toradex Configblock in eMMC, at the end of 1st "boot sector"
-config TRDX_CFG_BLOCK_OFFSET
+# Toradex config block in eMMC, at the end of 1st "boot sector"
+config TDX_CFG_BLOCK_OFFSET
 	default "-512"
+
+source "board/toradex/common/Kconfig"
 
 endif

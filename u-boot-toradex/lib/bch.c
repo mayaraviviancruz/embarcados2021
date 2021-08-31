@@ -1,18 +1,7 @@
 /*
  * Generic binary BCH encoding/decoding library
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 as published by
- * the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
- * more details.
- *
- * You should have received a copy of the GNU General Public License along with
- * this program; if not, write to the Free Software Foundation, Inc., 51
- * Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+ * SPDX-License-Identifier:	GPL-2.0
  *
  * Copyright © 2011 Parrot S.A.
  *
@@ -165,7 +154,7 @@ static void store_ecc8(struct bch_control *bch, uint8_t *dst,
 	memcpy(dst, pad, BCH_ECC_BYTES(bch)-4*nwords);
 }
 
-#ifdef CONFIG_TARGET_COLIBRI_IMX7
+#if defined(CONFIG_CMD_WRITEBCB_MX7)
 /*
  * reverse bit for byte
  */
@@ -262,7 +251,7 @@ void encode_bch(struct bch_control *bch, const uint8_t *data,
 	 */
 	while (mlen--) {
 		/* input data is read in big-endian format */
-#if CONFIG_TARGET_COLIBRI_IMX7
+#if defined(CONFIG_CMD_WRITEBCB_MX7)
 		/*TODO: big little endian*/
 		/*w = r[0]^cpu_to_be32(*pdata++);*/
 		/*w = r[0]^(uint32_t)(*pdata++);*/

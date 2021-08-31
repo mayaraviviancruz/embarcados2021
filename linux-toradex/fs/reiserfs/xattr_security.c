@@ -1,45 +1,44 @@
-#include <linux/reiserfs_fs.h>
+#include "reiserfs.h"
 #include <linux/errno.h>
 #include <linux/fs.h>
 #include <linux/pagemap.h>
 #include <linux/xattr.h>
 #include <linux/slab.h>
-#include <linux/reiserfs_xattr.h>
+#include "xattr.h"
 #include <linux/security.h>
-#include <asm/uaccess.h>
+#include <linux/uaccess.h>
 
 static int
-security_get(struct dentry *dentry, const char *name, void *buffer, size_t size,
-		int handler_flags)
+security_get(const struct xattr_handler *handler, struct dentry *dentry,
+	     const char *name, void *buffer, size_t size)
 {
-	if (strlen(name) < sizeof(XATTR_SECURITY_PREFIX))
-		return -EINVAL;
-
-	if (IS_PRIVATE(dentry->d_inode))
+	if (IS_PRIVATE(d_inode(dentry)))
 		return -EPERM;
 
-	return reiserfs_xattr_get(dentry->d_inode, name, buffer, size);
+	return reiserfs_xattr_get(d_inode(dentry),
+				  xattr_full_name(handler, name),
+				  buffer, size);
 }
 
 static int
-security_set(struct dentry *dentry, const char *name, const void *buffer,
-	     size_t size, int flags, int handler_flags)
+security_set(const struct xattr_handler *handler, struct dentry *dentry,
+	     const char *name, const void *buffer, size_t size, int flags)
 {
-	if (strlen(name) < sizeof(XATTR_SECURITY_PREFIX))
-		return -EINVAL;
-
-	if (IS_PRIVATE(dentry->d_inode))
+	if (IS_PRIVATE(d_inode(dentry)))
 		return -EPERM;
 
-	return reiserfs_xattr_set(dentry->d_inode, name, buffer, size, flags);
+	return reiserfs_xattr_set(d_inode(dentry),
+				  xattr_full_name(handler, name),
+				  buffer, size, flags);
 }
 
-static size_t security_list(struct dentry *dentry, char *list, size_t list_len,
-			    const char *name, size_t namelen, int handler_flags)
+static size_t security_list(const struct xattr_handler *handler,
+			    struct dentry *dentry, char *list, size_t list_len,
+			    const char *name, size_t namelen)
 {
 	const size_t len = namelen + 1;
 
-	if (IS_PRIVATE(dentry->d_inode))
+	if (IS_PRIVATE(d_inode(dentry)))
 		return 0;
 
 	if (list && len <= list_len) {
@@ -66,8 +65,8 @@ int reiserfs_security_init(struct inode *dir, struct inode *inode,
 	if (IS_PRIVATE(dir))
 		return 0;
 
-	error = security_inode_init_security(inode, dir, qstr, &sec->name,
-					     &sec->value, &sec->length);
+	error = security_old_inode_init_security(inode, dir, qstr, &sec->name,
+						 &sec->value, &sec->length);
 	if (error) {
 		if (error == -EOPNOTSUPP)
 			error = 0;

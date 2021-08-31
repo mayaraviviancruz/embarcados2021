@@ -6,6 +6,7 @@ config SYS_CPU
 
 choice
 	prompt "Target select"
+	optional
 
 config TARGET_SBC8548
 	bool "Support sbc8548"
@@ -16,6 +17,7 @@ config TARGET_SOCRATES
 config TARGET_B4860QDS
 	bool "Support B4860QDS"
 	select SUPPORT_SPL
+	select PHYS_64BIT
 
 config TARGET_BSC9131RDB
 	bool "Support BSC9131RDB"
@@ -29,18 +31,23 @@ config TARGET_C29XPCIE
 	bool "Support C29XPCIE"
 	select SUPPORT_SPL
 	select SUPPORT_TPL
+	select PHYS_64BIT
 
 config TARGET_P3041DS
 	bool "Support P3041DS"
+	select PHYS_64BIT
 
 config TARGET_P4080DS
 	bool "Support P4080DS"
+	select PHYS_64BIT
 
 config TARGET_P5020DS
 	bool "Support P5020DS"
+	select PHYS_64BIT
 
 config TARGET_P5040DS
 	bool "Support P5040DS"
+	select PHYS_64BIT
 
 config TARGET_MPC8536DS
 	bool "Support MPC8536DS"
@@ -95,54 +102,57 @@ config TARGET_P1_TWR
 
 config TARGET_P2041RDB
 	bool "Support P2041RDB"
+	select PHYS_64BIT
 
 config TARGET_QEMU_PPCE500
 	bool "Support qemu-ppce500"
+	select PHYS_64BIT
 
 config TARGET_T102XQDS
 	bool "Support T102xQDS"
 	select SUPPORT_SPL
+	select PHYS_64BIT
 
 config TARGET_T102XRDB
 	bool "Support T102xRDB"
 	select SUPPORT_SPL
+	select PHYS_64BIT
 
 config TARGET_T1040QDS
 	bool "Support T1040QDS"
+	select PHYS_64BIT
 
 config TARGET_T104XRDB
 	bool "Support T104xRDB"
 	select SUPPORT_SPL
+	select PHYS_64BIT
 
 config TARGET_T208XQDS
 	bool "Support T208xQDS"
 	select SUPPORT_SPL
+	select PHYS_64BIT
 
 config TARGET_T208XRDB
 	bool "Support T208xRDB"
 	select SUPPORT_SPL
-
-config TARGET_T4240EMU
-	bool "Support T4240EMU"
+	select PHYS_64BIT
 
 config TARGET_T4240QDS
 	bool "Support T4240QDS"
 	select SUPPORT_SPL
+	select PHYS_64BIT
 
 config TARGET_T4240RDB
 	bool "Support T4240RDB"
+	select SUPPORT_SPL
+	select PHYS_64BIT
 
 config TARGET_CONTROLCENTERD
 	bool "Support controlcenterd"
 
 config TARGET_KMP204X
 	bool "Support kmp204x"
-
-config TARGET_STXGP3
-	bool "Support stxgp3"
-
-config TARGET_STXSSA
-	bool "Support stxssa"
+	select PHYS_64BIT
 
 config TARGET_XPEDITE520X
 	bool "Support xpedite520x"
@@ -152,6 +162,13 @@ config TARGET_XPEDITE537X
 
 config TARGET_XPEDITE550X
 	bool "Support xpedite550x"
+
+config TARGET_UCP1020
+	bool "Support uCP1020"
+
+config TARGET_CYRUS
+	bool "Support Varisys Cyrus"
+	select PHYS_64BIT
 
 endchoice
 
@@ -189,10 +206,10 @@ source "board/gdsys/p1022/Kconfig"
 source "board/keymile/kmp204x/Kconfig"
 source "board/sbc8548/Kconfig"
 source "board/socrates/Kconfig"
-source "board/stx/stxgp3/Kconfig"
-source "board/stx/stxssa/Kconfig"
+source "board/varisys/cyrus/Kconfig"
 source "board/xes/xpedite520x/Kconfig"
 source "board/xes/xpedite537x/Kconfig"
 source "board/xes/xpedite550x/Kconfig"
+source "board/Arcturus/ucp1020/Kconfig"
 
 endmenu

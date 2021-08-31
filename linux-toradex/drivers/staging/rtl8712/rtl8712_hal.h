@@ -1,3 +1,28 @@
+/******************************************************************************
+ *
+ * Copyright(c) 2007 - 2010 Realtek Corporation. All rights reserved.
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of version 2 of the GNU General Public License as
+ * published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along with
+ * this program; if not, write to the Free Software Foundation, Inc.,
+ * 51 Franklin Street, Fifth Floor, Boston, MA 02110, USA
+ *
+ * Modifications for inclusion into the Linux staging tree are
+ * Copyright(c) 2010 Larry Finger. All rights reserved.
+ *
+ * Contact information:
+ * WLAN FAE <wlanfae@realtek.com>
+ * Larry Finger <Larry.Finger@lwfinger.net>
+ *
+ ******************************************************************************/
 #ifndef __RTL8712_HAL_H__
 #define __RTL8712_HAL_H__
 
@@ -43,12 +68,14 @@ struct fw_priv {   /*8-bytes alignment required*/
 	unsigned char signature_0;  /*0x12: CE product, 0x92: IT product*/
 	unsigned char signature_1;  /*0x87: CE product, 0x81: IT product*/
 	unsigned char hci_sel; /*0x81: PCI-AP, 01:PCIe, 02: 92S-U, 0x82: USB-AP,
-			    * 0x12: 72S-U, 03:SDIO*/
+			    * 0x12: 72S-U, 03:SDIO
+			    */
 	unsigned char chip_version; /*the same value as register value*/
 	unsigned char customer_ID_0; /*customer  ID low byte*/
 	unsigned char customer_ID_1; /*customer  ID high byte*/
 	unsigned char rf_config;  /*0x11:  1T1R, 0x12: 1T2R, 0x92: 1T2R turbo,
-			     * 0x22: 2T2R*/
+			     * 0x22: 2T2R
+			     */
 	unsigned char usb_ep_num;  /* 4: 4EP, 6: 6EP, 11: 11EP*/
 	/*--- long word 1 ----*/
 	unsigned char regulatory_class_0; /*regulatory class bit map 0*/
@@ -58,7 +85,7 @@ struct fw_priv {   /*8-bytes alignment required*/
 	unsigned char rfintfs;    /* 0:SWSI, 1:HWSI, 2:HWPI*/
 	unsigned char def_nettype;
 	unsigned char turboMode;
-	unsigned char lowPowerMode;/* 0: noral mode, 1: low power mode*/
+	unsigned char lowPowerMode;/* 0: normal mode, 1: low power mode*/
 	/*--- long word 2 ----*/
 	unsigned char lbk_mode; /*0x00: normal, 0x03: MACLBK, 0x01: PHYLBK*/
 	unsigned char mp_mode; /* 1: for MP use, 0: for normal driver */
@@ -72,7 +99,8 @@ struct fw_priv {   /*8-bytes alignment required*/
 	unsigned char qos_en;    /*1: QoS enable*/
 	unsigned char bw_40MHz_en;   /*1: 40MHz BW enable*/
 	unsigned char AMSDU2AMPDU_en;   /*1: 4181 convert AMSDU to AMPDU,
-				   * 0: disable*/
+				   * 0: disable
+				   */
 	unsigned char AMPDU_en;   /*1: 11n AMPDU enable*/
 	unsigned char rate_control_offload; /*1: FW offloads,0: driver handles*/
 	unsigned char aggregation_offload;  /*1: FW offloads,0: driver handles*/
@@ -98,10 +126,11 @@ struct fw_priv {   /*8-bytes alignment required*/
 	unsigned char rsvd053;
 };
 
-struct fw_hdr {/*8-byte alinment required*/
+struct fw_hdr {/*8-byte alignment required*/
 	unsigned short	signature;
-	unsigned short	version;	/*0x8000 ~ 0x8FFF for FPGA version,
-					 *0x0000 ~ 0x7FFF for ASIC version,*/
+	unsigned short	version;	/* 0x8000 ~ 0x8FFF for FPGA version,
+					 * 0x0000 ~ 0x7FFF for ASIC version,
+					 */
 	unsigned int		dmem_size;    /*define the size of boot loader*/
 	unsigned int		img_IMEM_size; /*define the size of FW in IMEM*/
 	unsigned int		img_SRAM_size; /*define the size of FW in SRAM*/
@@ -120,5 +149,6 @@ struct hal_priv {
 };
 
 uint	 rtl8712_hal_init(struct _adapter *padapter);
+int rtl871x_load_fw(struct _adapter *padapter);
 
 #endif

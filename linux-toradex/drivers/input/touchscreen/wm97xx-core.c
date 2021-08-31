@@ -54,10 +54,6 @@
 #define WM_CORE_VERSION		"1.00"
 #define DEFAULT_PRESSURE	0xb0c0
 
-#ifdef CONFIG_MACH_COLIBRI_T20
-extern void *get_colibri_t20_audio_platform_data(void);
-#endif
-
 
 /*
  * Touchscreen absolute values
@@ -74,11 +70,11 @@ extern void *get_colibri_t20_audio_platform_data(void);
  * Documentation/input/input-programming.txt for more details.
  */
 
-static int abs_x[3] = {350, 3900, 5};
+static int abs_x[3] = {150, 4000, 5};
 module_param_array(abs_x, int, NULL, 0);
 MODULE_PARM_DESC(abs_x, "Touchscreen absolute X min, max, fuzz");
 
-static int abs_y[3] = {320, 3750, 40};
+static int abs_y[3] = {200, 4000, 40};
 module_param_array(abs_y, int, NULL, 0);
 MODULE_PARM_DESC(abs_y, "Touchscreen absolute Y min, max, fuzz");
 
@@ -446,18 +442,18 @@ static int wm97xx_read_samples(struct wm97xx *wm)
 			"pen down: x=%x:%d, y=%x:%d, pressure=%x:%d\n",
 			data.x >> 12, data.x & 0xfff, data.y >> 12,
 			data.y & 0xfff, data.p >> 12, data.p & 0xfff);
-#ifndef CONFIG_ANDROID
+
+		if (abs_x[0] > (data.x & 0xfff) ||
+		    abs_x[1] < (data.x & 0xfff) ||
+		    abs_y[0] > (data.y & 0xfff) ||
+		    abs_y[1] < (data.y & 0xfff)) {
+			dev_dbg(wm->dev, "Measurement out of range, dropping it\n");
+			rc = RC_AGAIN;
+			goto out;
+		}
+
 		input_report_abs(wm->input_dev, ABS_X, data.x & 0xfff);
 		input_report_abs(wm->input_dev, ABS_Y, data.y & 0xfff);
-#else /* !CONFIG_ANDROID */
-		/* Hack: rotate touch for now due to missing calibration
-			 integration
-		   Note: 12-bit touch resolution */
-		input_report_abs(wm->input_dev, ABS_X, 4096 - (data.x & 0xfff));
-		input_report_abs(wm->input_dev, ABS_Y, 4096 - (data.y & 0xfff));
-#endif /* !CONFIG_ANDROID */
-
-
 		input_report_abs(wm->input_dev, ABS_PRESSURE, data.p & 0xfff);
 		input_report_key(wm->input_dev, BTN_TOUCH, 1);
 		input_sync(wm->input_dev);
@@ -469,6 +465,7 @@ static int wm97xx_read_samples(struct wm97xx *wm)
 		wm->ts_reader_interval = wm->ts_reader_min_interval;
 	}
 
+out:
 	mutex_unlock(&wm->codec_mutex);
 	return rc;
 }
@@ -587,7 +584,7 @@ static void wm97xx_ts_input_close(struct input_dev *idev)
 static int wm97xx_probe(struct device *dev)
 {
 	struct wm97xx *wm;
-	struct wm97xx_pdata *pdata = dev->platform_data;
+	struct wm97xx_pdata *pdata = dev_get_platdata(dev);
 	int ret = 0, id = 0;
 
 	wm = kzalloc(sizeof(struct wm97xx), GFP_KERNEL);
@@ -654,12 +651,7 @@ static int wm97xx_probe(struct device *dev)
 	}
 
 	/* set up touch configuration */
-#ifdef CONFIG_ANDROID
-	/* Hack: rename due to idc parser having issues with spaces in names */
-	wm->input_dev->name = "wm97xx-ts";
-#else /* CONFIG_ANDROID */
 	wm->input_dev->name = "wm97xx touchscreen";
-#endif /* CONFIG_ANDROID */
 	wm->input_dev->phys = "wm97xx";
 	wm->input_dev->open = wm97xx_ts_input_open;
 	wm->input_dev->close = wm97xx_ts_input_close;
@@ -690,13 +682,7 @@ static int wm97xx_probe(struct device *dev)
 	}
 	platform_set_drvdata(wm->battery_dev, wm);
 	wm->battery_dev->dev.parent = dev;
-
-#if defined(CONFIG_MACH_COLIBRI_T20) && !defined(CONFIG_ANDROID)
-	wm->battery_dev->dev.platform_data = get_colibri_t20_audio_platform_data();
-#else
 	wm->battery_dev->dev.platform_data = pdata;
-#endif
-
 	ret = platform_device_add(wm->battery_dev);
 	if (ret < 0)
 		goto batt_reg_err;
@@ -746,8 +732,7 @@ static int wm97xx_remove(struct device *dev)
 	return 0;
 }
 
-#ifdef CONFIG_PM
-static int wm97xx_suspend(struct device *dev, pm_message_t state)
+static int __maybe_unused wm97xx_suspend(struct device *dev)
 {
 	struct wm97xx *wm = dev_get_drvdata(dev);
 	u16 reg;
@@ -779,7 +764,7 @@ static int wm97xx_suspend(struct device *dev, pm_message_t state)
 	return 0;
 }
 
-static int wm97xx_resume(struct device *dev)
+static int __maybe_unused wm97xx_resume(struct device *dev)
 {
 	struct wm97xx *wm = dev_get_drvdata(dev);
 
@@ -813,10 +798,7 @@ static int wm97xx_resume(struct device *dev)
 	return 0;
 }
 
-#else
-#define wm97xx_suspend		NULL
-#define wm97xx_resume		NULL
-#endif
+static SIMPLE_DEV_PM_OPS(wm97xx_pm_ops, wm97xx_suspend, wm97xx_resume);
 
 /*
  * Machine specific operations
@@ -850,8 +832,7 @@ static struct device_driver wm97xx_driver = {
 	.owner =	THIS_MODULE,
 	.probe =	wm97xx_probe,
 	.remove =	wm97xx_remove,
-	.suspend =	wm97xx_suspend,
-	.resume =	wm97xx_resume,
+	.pm =		&wm97xx_pm_ops,
 };
 
 static int __init wm97xx_init(void)

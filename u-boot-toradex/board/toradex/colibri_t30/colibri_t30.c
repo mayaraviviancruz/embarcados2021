@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2015 Toradex, Inc.
+ * Copyright (c) 2012-2016 Toradex, Inc.
  *
  * SPDX-License-Identifier:	GPL-2.0+
  */
@@ -12,9 +12,9 @@
 #include <asm/gpio.h>
 #include <asm/io.h>
 #include <i2c.h>
-
+#include <fdt_support.h>
 #include "pinmux-config-colibri_t30.h"
-#include "../common/configblock.h"
+#include "../common/tdx-common.h"
 
 int arch_misc_init(void)
 {
@@ -27,12 +27,31 @@ int arch_misc_init(void)
 	return 0;
 }
 
-int checkboard_fallback(void)
+int checkboard(void)
 {
-	printf("Model: Toradex Colibri T30 1GB\n");
+	puts("Model: Toradex Colibri T30 1GB\n");
 
 	return 0;
 }
+
+#if defined(CONFIG_OF_LIBFDT) && defined(CONFIG_OF_BOARD_SETUP)
+int ft_board_setup(void *blob, bd_t *bd)
+{
+	uint8_t enetaddr[6];
+
+	/* MAC addr */
+	if (eth_getenv_enetaddr("ethaddr", enetaddr)) {
+		int err = fdt_find_and_setprop(blob,
+				     "/usb@7d004000/asix@1",
+				     "local-mac-address", enetaddr, 6, 0);
+
+		if (err >= 0)
+			puts("   MAC address updated...\n");
+	}
+
+	return ft_common_board_setup(blob, bd);
+}
+#endif
 
 /*
  * Routine: pinmux_init
@@ -57,8 +76,17 @@ void pinmux_init(void)
 void pin_mux_usb(void)
 {
 	/* Reset ASIX using LAN_RESET */
-	gpio_request(GPIO_PDD0, "LAN_RESET");
-	gpio_direction_output(GPIO_PDD0, 0);
+	gpio_request(TEGRA_GPIO(DD, 0), "LAN_RESET");
+	gpio_direction_output(TEGRA_GPIO(DD, 0), 0);
 	udelay(5);
-	gpio_set_value(GPIO_PDD0, 1);
+	gpio_set_value(TEGRA_GPIO(DD, 0), 1);
+}
+
+/*
+ * Backlight off before OS handover
+ */
+void board_preboot_os(void)
+{
+	gpio_request(TEGRA_GPIO(V, 2), "BL_ON");
+	gpio_direction_output(TEGRA_GPIO(V, 2), 0);
 }

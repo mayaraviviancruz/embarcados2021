@@ -22,7 +22,6 @@
 #include <linux/bootmem.h>
 
 #include <asm/ptrace.h>
-#include <asm/pci.h>
 #include <asm/cacheflush.h>
 #include <asm/tlbflush.h>
 
@@ -303,6 +302,7 @@ irongate_init_arch(void)
 #include <linux/vmalloc.h>
 #include <linux/agp_backend.h>
 #include <linux/agpgart.h>
+#include <linux/export.h>
 #include <asm/pgalloc.h>
 
 #define GET_PAGE_DIR_OFF(addr) (addr >> 22)

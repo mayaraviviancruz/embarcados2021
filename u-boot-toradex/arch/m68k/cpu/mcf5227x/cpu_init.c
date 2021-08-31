@@ -16,7 +16,6 @@
 #include <asm/io.h>
 #include <asm/rtc.h>
 #include <linux/compiler.h>
-#include <fsl_dspi.h>
 
 /*
  * Breath some life into the CPU...
@@ -140,7 +139,7 @@ void uart_port_conf(int port)
 	}
 }
 
-#ifdef CONFIG_FSL_DSPI
+#ifdef CONFIG_CF_DSPI
 void cfspi_port_conf(void)
 {
 	gpio_t *gpio = (gpio_t *) MMAP_GPIO;

@@ -1,7 +1,9 @@
-#ifndef _UM_SECTIONS_H
-#define _UM_SECTIONS_H
+#ifndef __UM_SECTIONS_H
+#define __UM_SECTIONS_H
 
-/* nothing to see, move along */
 #include <asm-generic/sections.h>
+
+extern char __binary_start[];
+extern char __syscall_stub_start[], __syscall_stub_end[];
 
 #endif

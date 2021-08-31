@@ -52,6 +52,7 @@
 #define MMAP_ESDHC	(CONFIG_SYS_MBAR + 0x000CC000)
 
 #include <asm/coldfire/crossbar.h>
+#include <asm/coldfire/dspi.h>
 #include <asm/coldfire/edma.h>
 #include <asm/coldfire/eport.h>
 #include <asm/coldfire/flexbus.h>

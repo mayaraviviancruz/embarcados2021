@@ -31,24 +31,17 @@
  * struct tps51632_regulator_platform_data - tps51632 regulator platform data.
  *
  * @reg_init_data: The regulator init data.
- * @enable_pwm: Enable PWM DVFS or not.
+ * @enable_pwm_dvfs: Enable PWM DVFS or not.
  * @dvfs_step_20mV: Step for DVFS is 20mV or 10mV.
- * @enable_vmax_alarm: Enable maximum voltage alarm or not.
- * @enable_overcurrent_alram: Enable overcurrent alarm or not.
- * @max_voltage_uV: Maximum possible voltage for alarm.
- * @base_voltage_uV: Base voltage when PWM enabled.
- * slew_rate_uv_per_us: Slew rate uV/us. The values can be
- *		6000 to 48000uV/us.
+ * @max_voltage_uV: Maximum possible voltage in PWM-DVFS mode.
+ * @base_voltage_uV: Base voltage when PWM-DVFS enabled.
  */
 struct tps51632_regulator_platform_data {
 	struct regulator_init_data *reg_init_data;
-	bool enable_pwm;
+	bool enable_pwm_dvfs;
 	bool dvfs_step_20mV;
-	bool enable_vmax_alarm;
-	bool enable_overcurrent_alram;
 	int max_voltage_uV;
 	int base_voltage_uV;
-	unsigned int slew_rate_uv_per_us;
 };
 
 #endif /* __LINUX_REGULATOR_TPS51632_H */

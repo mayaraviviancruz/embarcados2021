@@ -14,8 +14,8 @@
 #include <linux/clk.h>
 #include <linux/irq.h>
 #include <linux/io.h>
-
-#include <mach/ipu.h>
+#include <linux/module.h>
+#include <linux/dma/ipu-dma.h>
 
 #include "ipu_intern.h"
 
@@ -44,7 +44,6 @@ static void ipu_write_reg(struct ipu *ipu, u32 value, unsigned long reg)
 struct ipu_irq_bank {
 	unsigned int	control;
 	unsigned int	status;
-	spinlock_t	lock;
 	struct ipu	*ipu;
 };
 
@@ -81,7 +80,7 @@ static struct ipu_irq_map irq_map[CONFIG_MX3_IPU_IRQS];
 /* Protects allocations from the above array of maps */
 static DEFINE_MUTEX(map_lock);
 /* Protects register accesses and individual mappings */
-static DEFINE_SPINLOCK(bank_lock);
+static DEFINE_RAW_SPINLOCK(bank_lock);
 
 static struct ipu_irq_map *src2map(unsigned int src)
 {
@@ -101,11 +100,11 @@ static void ipu_irq_unmask(struct irq_data *d)
 	uint32_t reg;
 	unsigned long lock_flags;
 
-	spin_lock_irqsave(&bank_lock, lock_flags);
+	raw_spin_lock_irqsave(&bank_lock, lock_flags);
 
 	bank = map->bank;
 	if (!bank) {
-		spin_unlock_irqrestore(&bank_lock, lock_flags);
+		raw_spin_unlock_irqrestore(&bank_lock, lock_flags);
 		pr_err("IPU: %s(%u) - unmapped!\n", __func__, d->irq);
 		return;
 	}
@@ -114,7 +113,7 @@ static void ipu_irq_unmask(struct irq_data *d)
 	reg |= (1UL << (map->source & 31));
 	ipu_write_reg(bank->ipu, reg, bank->control);
 
-	spin_unlock_irqrestore(&bank_lock, lock_flags);
+	raw_spin_unlock_irqrestore(&bank_lock, lock_flags);
 }
 
 static void ipu_irq_mask(struct irq_data *d)
@@ -124,11 +123,11 @@ static void ipu_irq_mask(struct irq_data *d)
 	uint32_t reg;
 	unsigned long lock_flags;
 
-	spin_lock_irqsave(&bank_lock, lock_flags);
+	raw_spin_lock_irqsave(&bank_lock, lock_flags);
 
 	bank = map->bank;
 	if (!bank) {
-		spin_unlock_irqrestore(&bank_lock, lock_flags);
+		raw_spin_unlock_irqrestore(&bank_lock, lock_flags);
 		pr_err("IPU: %s(%u) - unmapped!\n", __func__, d->irq);
 		return;
 	}
@@ -137,7 +136,7 @@ static void ipu_irq_mask(struct irq_data *d)
 	reg &= ~(1UL << (map->source & 31));
 	ipu_write_reg(bank->ipu, reg, bank->control);
 
-	spin_unlock_irqrestore(&bank_lock, lock_flags);
+	raw_spin_unlock_irqrestore(&bank_lock, lock_flags);
 }
 
 static void ipu_irq_ack(struct irq_data *d)
@@ -146,17 +145,17 @@ static void ipu_irq_ack(struct irq_data *d)
 	struct ipu_irq_bank *bank;
 	unsigned long lock_flags;
 
-	spin_lock_irqsave(&bank_lock, lock_flags);
+	raw_spin_lock_irqsave(&bank_lock, lock_flags);
 
 	bank = map->bank;
 	if (!bank) {
-		spin_unlock_irqrestore(&bank_lock, lock_flags);
+		raw_spin_unlock_irqrestore(&bank_lock, lock_flags);
 		pr_err("IPU: %s(%u) - unmapped!\n", __func__, d->irq);
 		return;
 	}
 
 	ipu_write_reg(bank->ipu, 1UL << (map->source & 31), bank->status);
-	spin_unlock_irqrestore(&bank_lock, lock_flags);
+	raw_spin_unlock_irqrestore(&bank_lock, lock_flags);
 }
 
 /**
@@ -172,11 +171,11 @@ bool ipu_irq_status(unsigned int irq)
 	unsigned long lock_flags;
 	bool ret;
 
-	spin_lock_irqsave(&bank_lock, lock_flags);
+	raw_spin_lock_irqsave(&bank_lock, lock_flags);
 	bank = map->bank;
 	ret = bank && ipu_read_reg(bank->ipu, bank->status) &
 		(1UL << (map->source & 31));
-	spin_unlock_irqrestore(&bank_lock, lock_flags);
+	raw_spin_unlock_irqrestore(&bank_lock, lock_flags);
 
 	return ret;
 }
@@ -213,10 +212,10 @@ int ipu_irq_map(unsigned int source)
 		if (irq_map[i].source < 0) {
 			unsigned long lock_flags;
 
-			spin_lock_irqsave(&bank_lock, lock_flags);
+			raw_spin_lock_irqsave(&bank_lock, lock_flags);
 			irq_map[i].source = source;
 			irq_map[i].bank = irq_bank + source / 32;
-			spin_unlock_irqrestore(&bank_lock, lock_flags);
+			raw_spin_unlock_irqrestore(&bank_lock, lock_flags);
 
 			ret = irq_map[i].irq;
 			pr_debug("IPU: mapped source %u to IRQ %u\n",
@@ -252,10 +251,10 @@ int ipu_irq_unmap(unsigned int source)
 			pr_debug("IPU: unmapped source %u from IRQ %u\n",
 				 source, irq_map[i].irq);
 
-			spin_lock_irqsave(&bank_lock, lock_flags);
+			raw_spin_lock_irqsave(&bank_lock, lock_flags);
 			irq_map[i].source = -EINVAL;
 			irq_map[i].bank = NULL;
-			spin_unlock_irqrestore(&bank_lock, lock_flags);
+			raw_spin_unlock_irqrestore(&bank_lock, lock_flags);
 
 			ret = 0;
 			break;
@@ -266,17 +265,17 @@ int ipu_irq_unmap(unsigned int source)
 	return ret;
 }
 
-/* Chained IRQ handler for IPU error interrupt */
-static void ipu_irq_err(unsigned int irq, struct irq_desc *desc)
+/* Chained IRQ handler for IPU function and error interrupt */
+static void ipu_irq_handler(struct irq_desc *desc)
 {
-	struct ipu *ipu = irq_get_handler_data(irq);
+	struct ipu *ipu = irq_desc_get_handler_data(desc);
 	u32 status;
 	int i, line;
 
-	for (i = IPU_IRQ_NR_FN_BANKS; i < IPU_IRQ_NR_BANKS; i++) {
+	for (i = 0; i < IPU_IRQ_NR_BANKS; i++) {
 		struct ipu_irq_bank *bank = irq_bank + i;
 
-		spin_lock(&bank_lock);
+		raw_spin_lock(&bank_lock);
 		status = ipu_read_reg(ipu, bank->status);
 		/*
 		 * Don't think we have to clear all interrupts here, they will
@@ -284,61 +283,24 @@ static void ipu_irq_err(unsigned int irq, struct irq_desc *desc)
 		 * might want to clear unhandled interrupts after the loop...
 		 */
 		status &= ipu_read_reg(ipu, bank->control);
-		spin_unlock(&bank_lock);
+		raw_spin_unlock(&bank_lock);
 		while ((line = ffs(status))) {
 			struct ipu_irq_map *map;
+			unsigned int irq;
 
 			line--;
 			status &= ~(1UL << line);
 
-			spin_lock(&bank_lock);
+			raw_spin_lock(&bank_lock);
 			map = src2map(32 * i + line);
-			if (map)
-				irq = map->irq;
-			spin_unlock(&bank_lock);
-
 			if (!map) {
+				raw_spin_unlock(&bank_lock);
 				pr_err("IPU: Interrupt on unmapped source %u bank %d\n",
 				       line, i);
 				continue;
 			}
-			generic_handle_irq(irq);
-		}
-	}
-}
-
-/* Chained IRQ handler for IPU function interrupt */
-static void ipu_irq_fn(unsigned int irq, struct irq_desc *desc)
-{
-	struct ipu *ipu = irq_desc_get_handler_data(desc);
-	u32 status;
-	int i, line;
-
-	for (i = 0; i < IPU_IRQ_NR_FN_BANKS; i++) {
-		struct ipu_irq_bank *bank = irq_bank + i;
-
-		spin_lock(&bank_lock);
-		status = ipu_read_reg(ipu, bank->status);
-		/* Not clearing all interrupts, see above */
-		status &= ipu_read_reg(ipu, bank->control);
-		spin_unlock(&bank_lock);
-		while ((line = ffs(status))) {
-			struct ipu_irq_map *map;
-
-			line--;
-			status &= ~(1UL << line);
-
-			spin_lock(&bank_lock);
-			map = src2map(32 * i + line);
-			if (map)
-				irq = map->irq;
-			spin_unlock(&bank_lock);
-
-			if (!map) {
-				pr_err("IPU: Interrupt on unmapped source %u bank %d\n",
-				       line, i);
-				continue;
-			}
+			irq = map->irq;
+			raw_spin_unlock(&bank_lock);
 			generic_handle_irq(irq);
 		}
 	}
@@ -354,10 +316,12 @@ static struct irq_chip ipu_irq_chip = {
 /* Install the IRQ handler */
 int __init ipu_irq_attach_irq(struct ipu *ipu, struct platform_device *dev)
 {
-	struct ipu_platform_data *pdata = dev->dev.platform_data;
-	unsigned int irq, irq_base, i;
+	unsigned int irq, i;
+	int irq_base = irq_alloc_descs(-1, 0, CONFIG_MX3_IPU_IRQS,
+				       numa_node_id());
 
-	irq_base = pdata->irq_base;
+	if (irq_base < 0)
+		return irq_base;
 
 	for (i = 0; i < IPU_IRQ_NR_BANKS; i++)
 		irq_bank[i].ipu = ipu;
@@ -376,37 +340,30 @@ int __init ipu_irq_attach_irq(struct ipu *ipu, struct platform_device *dev)
 		irq_map[i].irq = irq;
 		irq_map[i].source = -EINVAL;
 		irq_set_handler(irq, handle_level_irq);
-#ifdef CONFIG_ARM
-		set_irq_flags(irq, IRQF_VALID | IRQF_PROBE);
-#endif
+		irq_clear_status_flags(irq, IRQ_NOREQUEST | IRQ_NOPROBE);
 	}
 
-	irq_set_handler_data(ipu->irq_fn, ipu);
-	irq_set_chained_handler(ipu->irq_fn, ipu_irq_fn);
+	irq_set_chained_handler_and_data(ipu->irq_fn, ipu_irq_handler, ipu);
 
-	irq_set_handler_data(ipu->irq_err, ipu);
-	irq_set_chained_handler(ipu->irq_err, ipu_irq_err);
+	irq_set_chained_handler_and_data(ipu->irq_err, ipu_irq_handler, ipu);
+
+	ipu->irq_base = irq_base;
 
 	return 0;
 }
 
 void ipu_irq_detach_irq(struct ipu *ipu, struct platform_device *dev)
 {
-	struct ipu_platform_data *pdata = dev->dev.platform_data;
 	unsigned int irq, irq_base;
 
-	irq_base = pdata->irq_base;
+	irq_base = ipu->irq_base;
 
-	irq_set_chained_handler(ipu->irq_fn, NULL);
-	irq_set_handler_data(ipu->irq_fn, NULL);
+	irq_set_chained_handler_and_data(ipu->irq_fn, NULL, NULL);
 
-	irq_set_chained_handler(ipu->irq_err, NULL);
-	irq_set_handler_data(ipu->irq_err, NULL);
+	irq_set_chained_handler_and_data(ipu->irq_err, NULL, NULL);
 
 	for (irq = irq_base; irq < irq_base + CONFIG_MX3_IPU_IRQS; irq++) {
-#ifdef CONFIG_ARM
-		set_irq_flags(irq, 0);
-#endif
+		irq_set_status_flags(irq, IRQ_NOREQUEST);
 		irq_set_chip(irq, NULL);
 		irq_set_chip_data(irq, NULL);
 	}

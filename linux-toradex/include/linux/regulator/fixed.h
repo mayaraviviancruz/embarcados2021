@@ -22,6 +22,7 @@ struct regulator_init_data;
 /**
  * struct fixed_voltage_config - fixed_voltage_config structure
  * @supply_name:	Name of the regulator supply
+ * @input_supply:	Name of the input regulator supply
  * @microvolts:		Output voltage of regulator
  * @gpio:		GPIO to use for enable control
  * 			set to -EINVAL if not used
@@ -46,6 +47,7 @@ struct regulator_init_data;
  */
 struct fixed_voltage_config {
 	const char *supply_name;
+	const char *input_supply;
 	int microvolts;
 	int gpio;
 	unsigned startup_delay;
@@ -54,5 +56,21 @@ struct fixed_voltage_config {
 	unsigned enabled_at_boot:1;
 	struct regulator_init_data *init_data;
 };
+
+struct regulator_consumer_supply;
+
+#if IS_ENABLED(CONFIG_REGULATOR)
+struct platform_device *regulator_register_always_on(int id, const char *name,
+		struct regulator_consumer_supply *supplies, int num_supplies, int uv);
+#else
+static inline struct platform_device *regulator_register_always_on(int id, const char *name,
+		struct regulator_consumer_supply *supplies, int num_supplies, int uv)
+{
+	return NULL;
+}
+#endif
+
+#define regulator_register_fixed(id, s, ns) regulator_register_always_on(id, \
+						"fixed-dummy", s, ns, 0)
 
 #endif

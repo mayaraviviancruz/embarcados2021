@@ -1,6 +1,7 @@
 if ARCH_MX5
 
 config MX5
+	select GPT_TIMER
 	bool
 	default y
 
@@ -12,6 +13,7 @@ config MX53
 
 choice
 	prompt "MX5 board select"
+	optional
 
 config TARGET_USBARMORY
 	bool "Support USB armory"

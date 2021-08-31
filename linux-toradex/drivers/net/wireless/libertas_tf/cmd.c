@@ -11,6 +11,7 @@
 
 #include <linux/hardirq.h>
 #include <linux/slab.h>
+#include <linux/export.h>
 
 #include "libertas_tf.h"
 
@@ -68,7 +69,7 @@ static void lbtf_geo_init(struct lbtf_private *priv)
 			break;
 		}
 
-	for (ch = priv->range.start; ch < priv->range.end; ch++)
+	for (ch = range->start; ch < range->end; ch++)
 		priv->channels[CHAN_TO_IDX(ch)].flags = 0;
 }
 

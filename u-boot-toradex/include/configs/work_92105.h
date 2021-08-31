@@ -63,9 +63,6 @@
 #define CONFIG_PHYLIB
 #define CONFIG_PHY_ADDR 0
 #define CONFIG_SYS_FAULT_ECHO_LINK_DOWN
-#define CONFIG_CMD_MII
-#define CONFIG_CMD_PING
-#define CONFIG_CMD_DHCP
 /* FIXME: remove "Waiting for PHY auto negotiation to complete..." message */
 
 /*
@@ -74,7 +71,6 @@
 
 #define CONFIG_SYS_I2C_LPC32XX
 #define CONFIG_SYS_I2C
-#define CONFIG_CMD_I2C
 #define CONFIG_SYS_I2C_SPEED 350000
 
 /*
@@ -103,7 +99,6 @@
 /*
  * U-Boot General Configurations
  */
-#define CONFIG_SYS_GENERIC_BOARD
 #define CONFIG_SYS_LONGHELP
 #define CONFIG_SYS_CBSIZE		1024
 #define CONFIG_SYS_PBSIZE		\
@@ -111,12 +106,8 @@
 #define CONFIG_SYS_MAXARGS		16
 #define CONFIG_SYS_BARGSIZE		CONFIG_SYS_CBSIZE
 
-#define CONFIG_SYS_HUSH_PARSER
-
 #define CONFIG_AUTO_COMPLETE
 #define CONFIG_CMDLINE_EDITING
-#define CONFIG_VERSION_VARIABLE
-#define CONFIG_DISPLAY_CPUINFO
 #define CONFIG_DOS_PARTITION
 
 /*
@@ -154,14 +145,12 @@
  * GPIO
  */
 
-#define CONFIG_CMD_GPIO
 #define CONFIG_LPC32XX_GPIO
 
 /*
  * SSP/SPI/DISPLAY
  */
 
-#define CONFIG_CMD_SPI
 #define CONFIG_LPC32XX_SSP
 #define CONFIG_LPC32XX_SSP_TIMEOUT 100000
 #define CONFIG_CMD_MAX6957
@@ -177,30 +166,11 @@
 #define CONFIG_ENV_ADDR			0x80000100
 
 /*
- * Provide default ethernet address
- *
- * THIS IS NORMALLY NOT DONE. HERE WE KEEP WHAT WAS IN THE PORTED
- * BOARD CONFIG IN CASE SOME PROVISIONING PROCESS OUT THERE EXPECTS
- * THIS MAC ADDRESS WHEN THE DEVICE HAS STILL ITS DEFAULT CONFIG.
- */
-
-#define CONFIG_ETHADDR			00:12:B4:00:AF:FE
-#define	CONFIG_OVERWRITE_ETHADDR_ONCE
-
-/*
- * U-Boot Commands
- */
-#include <config_cmd_default.h>
-
-/*
  * Boot Linux
  */
 #define CONFIG_CMDLINE_TAG
 #define CONFIG_SETUP_MEMORY_TAGS
 #define CONFIG_INITRD_TAG
-
-#define CONFIG_ZERO_BOOTDELAY_CHECK
-#define CONFIG_BOOTDELAY		3
 
 #define CONFIG_BOOTFILE			"uImage"
 #define CONFIG_BOOTARGS			"console=ttyS2,115200n8"
@@ -217,12 +187,8 @@
 #define CONFIG_SPL_BOARD_INIT
 /* Use the framework and generic lib */
 #define CONFIG_SPL_FRAMEWORK
-#define CONFIG_SPL_LIBGENERIC_SUPPORT
-#define CONFIG_SPL_LIBCOMMON_SUPPORT
 /* SPL will use serial */
-#define CONFIG_SPL_SERIAL_SUPPORT
 /* SPL will load U-Boot from NAND offset 0x40000 */
-#define CONFIG_SPL_NAND_SUPPORT
 #define CONFIG_SPL_NAND_DRIVERS
 #define CONFIG_SPL_NAND_BASE
 #define CONFIG_SPL_NAND_BOOT

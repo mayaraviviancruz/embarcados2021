@@ -1,30 +1,22 @@
 /*
- * Copyright (C) 2014-2015 Freescale Semiconductor, Inc.
+ * Copyright (C) 2015 Freescale Semiconductor, Inc.
  *
  * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
-#include <asm/armv7.h>
-#include <asm/errno.h>
 #include <asm/io.h>
 #include <asm/arch/imx-regs.h>
 #include <asm/arch/clock.h>
 #include <asm/arch/sys_proto.h>
 #include <asm/imx-common/boot_mode.h>
 #include <asm/imx-common/dma.h>
-#include <stdbool.h>
+#include <asm/imx-common/hab.h>
+#include <asm/imx-common/rdc-sema.h>
+#include <asm/arch/imx-rdc.h>
 #include <asm/arch/crm_regs.h>
 #include <dm.h>
 #include <imx_thermal.h>
-#include <mxsfb.h>
-#ifdef CONFIG_FSL_FASTBOOT
-#ifdef CONFIG_ANDROID_RECOVERY
-#include <recovery.h>
-#endif
-#endif
-
-struct src *src_reg = (struct src *)SRC_BASE_ADDR;
 
 #if defined(CONFIG_IMX_THERMAL)
 static const struct imx_thermal_plat imx7_thermal_plat = {
@@ -39,12 +31,164 @@ U_BOOT_DEVICE(imx7_thermal) = {
 };
 #endif
 
+#ifdef CONFIG_IMX_RDC
+/*
+ * In current design, if any peripheral was assigned to both A7 and M4,
+ * it will receive ipg_stop or ipg_wait when any of the 2 platforms enter
+ * low power mode. So M4 sleep will cause some peripherals fail to work
+ * at A7 core side. At default, all resources are in domain 0 - 3.
+ *
+ * There are 26 peripherals impacted by this IC issue:
+ * SIM2(sim2/emvsim2)
+ * SIM1(sim1/emvsim1)
+ * UART1/UART2/UART3/UART4/UART5/UART6/UART7
+ * SAI1/SAI2/SAI3
+ * WDOG1/WDOG2/WDOG3/WDOG4
+ * GPT1/GPT2/GPT3/GPT4
+ * PWM1/PWM2/PWM3/PWM4
+ * ENET1/ENET2
+ * Software Workaround:
+ * Here we setup some resources to domain 0 where M4 codes will move
+ * the M4 out of this domain. Then M4 is not able to access them any longer.
+ * This is a workaround for ic issue. So the peripherals are not shared
+ * by them. This way requires the uboot implemented the RDC driver and
+ * set the 26 IPs above to domain 0 only. M4 code will assign resource
+ * to its own domain, if it want to use the resource.
+ */
+static rdc_peri_cfg_t const resources[] = {
+	(RDC_PER_SIM1 | RDC_DOMAIN(0)),
+	(RDC_PER_SIM2 | RDC_DOMAIN(0)),
+	(RDC_PER_UART1 | RDC_DOMAIN(0)),
+	(RDC_PER_UART2 | RDC_DOMAIN(0)),
+	(RDC_PER_UART3 | RDC_DOMAIN(0)),
+	(RDC_PER_UART4 | RDC_DOMAIN(0)),
+	(RDC_PER_UART5 | RDC_DOMAIN(0)),
+	(RDC_PER_UART6 | RDC_DOMAIN(0)),
+	(RDC_PER_UART7 | RDC_DOMAIN(0)),
+	(RDC_PER_SAI1 | RDC_DOMAIN(0)),
+	(RDC_PER_SAI2 | RDC_DOMAIN(0)),
+	(RDC_PER_SAI3 | RDC_DOMAIN(0)),
+	(RDC_PER_WDOG1 | RDC_DOMAIN(0)),
+	(RDC_PER_WDOG2 | RDC_DOMAIN(0)),
+	(RDC_PER_WDOG3 | RDC_DOMAIN(0)),
+	(RDC_PER_WDOG4 | RDC_DOMAIN(0)),
+	(RDC_PER_GPT1 | RDC_DOMAIN(0)),
+	(RDC_PER_GPT2 | RDC_DOMAIN(0)),
+	(RDC_PER_GPT3 | RDC_DOMAIN(0)),
+	(RDC_PER_GPT4 | RDC_DOMAIN(0)),
+	(RDC_PER_PWM1 | RDC_DOMAIN(0)),
+	(RDC_PER_PWM2 | RDC_DOMAIN(0)),
+	(RDC_PER_PWM3 | RDC_DOMAIN(0)),
+	(RDC_PER_PWM4 | RDC_DOMAIN(0)),
+	(RDC_PER_ENET1 | RDC_DOMAIN(0)),
+	(RDC_PER_ENET2 | RDC_DOMAIN(0)),
+};
+
+static void isolate_resource(void)
+{
+	imx_rdc_setup_peripherals(resources, ARRAY_SIZE(resources));
+}
+#endif
+
+#if defined(CONFIG_SECURE_BOOT)
+struct imx_sec_config_fuse_t const imx_sec_config_fuse = {
+	.bank = 1,
+	.word = 3,
+};
+#endif
+
+/*
+ * OCOTP_TESTER3[9:8] (see Fusemap Description Table offset 0x440)
+ * defines a 2-bit SPEED_GRADING
+ */
+#define OCOTP_TESTER3_SPEED_SHIFT	8
+#define OCOTP_TESTER3_SPEED_800MHZ	0
+#define OCOTP_TESTER3_SPEED_850MHZ	1
+#define OCOTP_TESTER3_SPEED_1GHZ	2
+
+u32 get_cpu_speed_grade_hz(void)
+{
+	struct ocotp_regs *ocotp = (struct ocotp_regs *)OCOTP_BASE_ADDR;
+	struct fuse_bank *bank = &ocotp->bank[1];
+	struct fuse_bank1_regs *fuse =
+		(struct fuse_bank1_regs *)bank->fuse_regs;
+	uint32_t val;
+
+	val = readl(&fuse->tester3);
+	val >>= OCOTP_TESTER3_SPEED_SHIFT;
+	val &= 0x3;
+
+	switch(val) {
+	case OCOTP_TESTER3_SPEED_800MHZ:
+		return 792000000;
+	case OCOTP_TESTER3_SPEED_850MHZ:
+		return 852000000;
+	case OCOTP_TESTER3_SPEED_1GHZ:
+		return 996000000;
+	}
+	return 0;
+}
+
+/*
+ * OCOTP_TESTER3[7:6] (see Fusemap Description Table offset 0x440)
+ * defines a 2-bit SPEED_GRADING
+ */
+#define OCOTP_TESTER3_TEMP_SHIFT	6
+
+u32 get_cpu_temp_grade(int *minc, int *maxc)
+{
+	struct ocotp_regs *ocotp = (struct ocotp_regs *)OCOTP_BASE_ADDR;
+	struct fuse_bank *bank = &ocotp->bank[1];
+	struct fuse_bank1_regs *fuse =
+		(struct fuse_bank1_regs *)bank->fuse_regs;
+	uint32_t val;
+
+	val = readl(&fuse->tester3);
+	val >>= OCOTP_TESTER3_TEMP_SHIFT;
+	val &= 0x3;
+
+	if (minc && maxc) {
+		if (val == TEMP_AUTOMOTIVE) {
+			*minc = -40;
+			*maxc = 125;
+		} else if (val == TEMP_INDUSTRIAL) {
+			*minc = -40;
+			*maxc = 105;
+		} else if (val == TEMP_EXTCOMMERCIAL) {
+			*minc = -20;
+			*maxc = 105;
+		} else {
+			*minc = 0;
+			*maxc = 95;
+		}
+	}
+	return val;
+}
+
+static bool is_mx7d(void)
+{
+	struct ocotp_regs *ocotp = (struct ocotp_regs *)OCOTP_BASE_ADDR;
+	struct fuse_bank *bank = &ocotp->bank[1];
+	struct fuse_bank1_regs *fuse =
+		(struct fuse_bank1_regs *)bank->fuse_regs;
+	int val;
+
+	val = readl(&fuse->tester4);
+	if (val & 1)
+		return false;
+	else
+		return true;
+}
+
 u32 get_cpu_rev(void)
 {
 	struct mxc_ccm_anatop_reg *ccm_anatop = (struct mxc_ccm_anatop_reg *)
 						 ANATOP_BASE_ADDR;
 	u32 reg = readl(&ccm_anatop->digprog);
 	u32 type = (reg >> 16) & 0xff;
+
+	if (!is_mx7d())
+		type = MXC_CPU_MX7S;
 
 	reg &= 0xff;
 	return (type << 12) | reg;
@@ -53,136 +197,72 @@ u32 get_cpu_rev(void)
 #ifdef CONFIG_REVISION_TAG
 u32 __weak get_board_rev(void)
 {
-	u32 cpurev = get_cpu_rev();
-	u32 type = ((cpurev >> 12) & 0xff);
-
-	if (type == MXC_CPU_MX7D)
-		cpurev = (MXC_CPU_MX7D) << 12 | (cpurev & 0xFFF);
-
-	return cpurev;
+	return get_cpu_rev();
 }
 #endif
 
-static void init_aips(void)
+/* enable all periherial can be accessed in nosec mode */
+static void init_csu(void)
 {
-	struct aipstz_regs *aips1, *aips2, *aips3;
+	int i = 0;
+	for (i = 0; i < CSU_NUM_REGS; i++)
+		writel(CSU_INIT_SEC_LEVEL0, CSU_IPS_BASE_ADDR + i * 4);
+}
 
-	aips1 = (struct aipstz_regs *)AIPS1_ON_BASE_ADDR;
-	aips2 = (struct aipstz_regs *)AIPS2_ON_BASE_ADDR;
-	aips3 = (struct aipstz_regs *)AIPS3_ON_BASE_ADDR;
+static void imx_enet_mdio_fixup(void)
+{
+	struct iomuxc_gpr_base_regs *gpr_regs =
+		(struct iomuxc_gpr_base_regs *)IOMUXC_GPR_BASE_ADDR;
 
 	/*
-	 * Set all MPROTx to be non-bufferable, trusted for R/W,
-	 * not forced to user-mode.
+	 * The management data input/output (MDIO) requires open-drain,
+	 * i.MX7D TO1.0 ENET MDIO pin has no open drain, but TO1.1 supports
+	 * this feature. So to TO1.1, need to enable open drain by setting
+	 * bits GPR0[8:7].
 	 */
-	writel(0x77777777, &aips1->mprot0);
-	writel(0x77777777, &aips1->mprot1);
-	writel(0x77777777, &aips2->mprot0);
-	writel(0x77777777, &aips2->mprot1);
-	writel(0x77777777, &aips3->mprot0);
-	writel(0x77777777, &aips3->mprot1);
 
-	/*
-	 * Set all OPACRx to be non-bufferable, not require
-	 * supervisor privilege level for access,allow for
-	 * write access and untrusted master access.
-	 */
-	writel(0x00000000, &aips1->opacr0);
-	writel(0x00000000, &aips1->opacr1);
-	writel(0x00000000, &aips1->opacr2);
-	writel(0x00000000, &aips1->opacr3);
-	writel(0x00000000, &aips1->opacr4);
-	writel(0x00000000, &aips2->opacr0);
-	writel(0x00000000, &aips2->opacr1);
-	writel(0x00000000, &aips2->opacr2);
-	writel(0x00000000, &aips2->opacr3);
-	writel(0x00000000, &aips2->opacr4);
-	writel(0x00000000, &aips3->opacr0);
-	writel(0x00000000, &aips3->opacr1);
-	writel(0x00000000, &aips3->opacr2);
-	writel(0x00000000, &aips3->opacr3);
-	writel(0x00000000, &aips3->opacr4);
-}
-
-static void imx_set_pcie_phy_power_down(void)
-{
-	/* TODO */
-}
-
-static void imx_set_wdog_powerdown(bool enable)
-{
-	struct wdog_regs *wdog1 = (struct wdog_regs *)WDOG1_BASE_ADDR;
-	struct wdog_regs *wdog2 = (struct wdog_regs *)WDOG2_BASE_ADDR;
-	struct wdog_regs *wdog3 = (struct wdog_regs *)WDOG3_BASE_ADDR;
-	struct wdog_regs *wdog4 = (struct wdog_regs *)WDOG4_BASE_ADDR;
-
-	writew(enable, &wdog1->wmcr);
-	writew(enable, &wdog2->wmcr);
-	writew(enable, &wdog3->wmcr);
-	writew(enable, &wdog4->wmcr);
-}
-
-static void set_epdc_qos(void)
-{
-#define REGS_QOS_BASE     QOSC_IPS_BASE_ADDR
-#define REGS_QOS_EPDC     (QOSC_IPS_BASE_ADDR + 0x3400)
-#define REGS_QOS_PXP0     (QOSC_IPS_BASE_ADDR + 0x2C00)
-#define REGS_QOS_PXP1     (QOSC_IPS_BASE_ADDR + 0x3C00)
-
-	writel(0, REGS_QOS_BASE);  /*  Disable clkgate & soft_reset */
-	writel(0, REGS_QOS_BASE + 0x60);  /*  Enable all masters */
-	writel(0, REGS_QOS_EPDC);   /*  Disable clkgate & soft_reset */
-	writel(0, REGS_QOS_PXP0);   /*  Disable clkgate & soft_reset */
-	writel(0, REGS_QOS_PXP1);   /*  Disable clkgate & soft_reset */
-
-	writel(0x0f020722, REGS_QOS_EPDC + 0xd0);   /*  WR, init = 7 with red flag */
-	writel(0x0f020722, REGS_QOS_EPDC + 0xe0);   /*  RD,  init = 7 with red flag */
-
-	writel(1, REGS_QOS_PXP0);   /*  OT_CTRL_EN =1 */
-	writel(1, REGS_QOS_PXP1);   /*  OT_CTRL_EN =1 */
-
-	writel(0x0f020222, REGS_QOS_PXP0 + 0x50);   /*  WR,  init = 2 with red flag */
-	writel(0x0f020222, REGS_QOS_PXP1 + 0x50);   /*  WR,  init = 2 with red flag */
-	writel(0x0f020222, REGS_QOS_PXP0 + 0x60);   /*  rD,  init = 2 with red flag */
-	writel(0x0f020222, REGS_QOS_PXP1 + 0x60);   /*  rD,  init = 2 with red flag */
-	writel(0x0f020422, REGS_QOS_PXP0 + 0x70);   /*  tOTAL,  init = 4 with red flag */
-	writel(0x0f020422, REGS_QOS_PXP1 + 0x70);   /*  TOTAL,  init = 4 with red flag */
-
-	writel(0xe080, IOMUXC_GPR_BASE_ADDR + 0x0034); /* EPDC AW/AR CACHE ENABLE */
+	if (soc_rev() >= CHIP_REV_1_1) {
+		setbits_le32(&gpr_regs->gpr[0],
+			     IOMUXC_GPR_GPR0_ENET_MDIO_OPEN_DRAIN_MASK);
+	}
 }
 
 int arch_cpu_init(void)
 {
 	init_aips();
 
+	init_csu();
 	/* Disable PDE bit of WMCR register */
 	imx_set_wdog_powerdown(false);
 
-	imx_set_pcie_phy_power_down();
+	imx_enet_mdio_fixup();
 
 #ifdef CONFIG_APBH_DMA
 	/* Start APBH DMA */
 	mxs_dma_init();
 #endif
 
-	set_epdc_qos();
+	if (IS_ENABLED(CONFIG_IMX_RDC))
+		isolate_resource();
 
 	return 0;
 }
 
-#ifdef CONFIG_BOARD_POSTCLK_INIT
-int board_postclk_init(void)
+#ifdef CONFIG_ARCH_MISC_INIT
+int arch_misc_init(void)
 {
-	/*
-	 * We do not need to set LDO_SOC as i.mx6, since LDO_ARM and LDO_SOC
-	 * does not exist. Check "Figure 7-9. i.MX7Dual Power Diagram"
-	 */
+#ifdef CONFIG_ENV_VARS_UBOOT_RUNTIME_CONFIG
+	if (is_mx7d())
+		setenv("soc", "imx7d");
+	else
+		setenv("soc", "imx7s");
+#endif
+
 	return 0;
 }
 #endif
 
 #ifdef CONFIG_SERIAL_TAG
-#ifndef CONFIG_SERIAL_TAG_BOARD
 void get_board_serial(struct tag_serialnr *serialnr)
 {
 	struct ocotp_regs *ocotp = (struct ocotp_regs *)OCOTP_BASE_ADDR;
@@ -192,32 +272,6 @@ void get_board_serial(struct tag_serialnr *serialnr)
 
 	serialnr->low = fuse->tester0;
 	serialnr->high = fuse->tester1;
-}
-#endif
-#endif
-
-#ifndef CONFIG_SYS_DCACHE_OFF
-void enable_caches(void)
-{
-#if defined(CONFIG_SYS_ARM_CACHE_WRITETHROUGH)
-	enum dcache_option option = DCACHE_WRITETHROUGH;
-#else
-	enum dcache_option option = DCACHE_WRITEBACK;
-#endif
-
-	/* Avoid random hang when download by usb */
-	invalidate_dcache_all();
-
-	/* Enable D-cache. I-cache is already enabled in start.S */
-	dcache_enable();
-
-	/* Enable caching on OCRAM and ROM */
-	mmu_set_region_dcache_behaviour(ROMCP_ARB_BASE_ADDR,
-					ROMCP_ARB_END_ADDR,
-					option);
-	mmu_set_region_dcache_behaviour(IRAM_BASE_ADDR,
-					IRAM_SIZE,
-					option);
 }
 #endif
 
@@ -253,23 +307,44 @@ void imx_get_mac_from_fuse(int dev_id, unsigned char *mac)
 }
 #endif
 
-int arch_auxiliary_core_up(u32 core_id, u32 boot_private_data)
+#ifdef CONFIG_IMX_BOOTAUX
+const struct memorymap hostmap[] = {
+	{ .auxcore = 0x00000000, .host = 0x00180000, .size = 0x8000 },
+	{ .auxcore = 0x00180000, .host = 0x00180000, .size = 0x8000 },
+	{ .auxcore = 0x20180000, .host = 0x00180000, .size = 0x8000 },
+	{ .auxcore = 0x1fff8000, .host = 0x007f8000, .size = 0x8000 },
+	{ .auxcore = 0x20000000, .host = 0x00800000, .size = 0x8000 },
+	{ .auxcore = 0x00900000, .host = 0x00900000, .size = 0x20000 },
+	{ .auxcore = 0x20200000, .host = 0x00900000, .size = 0x20000 },
+	{ .auxcore = 0x00920000, .host = 0x00920000, .size = 0x20000 },
+	{ .auxcore = 0x20220000, .host = 0x00920000, .size = 0x20000 },
+	{ .auxcore = 0x00940000, .host = 0x00940000, .size = 0x20000 },
+	{ .auxcore = 0x20240000, .host = 0x00940000, .size = 0x20000 },
+	{ .auxcore = 0x10000000, .host = 0x80000000, .size = 0x0fff0000 },
+	{ .auxcore = 0x80000000, .host = 0x80000000, .size = 0xe0000000 },
+	{ /* sentinel */ }
+};
+
+/*
+ * Per the cortex-M reference manual, the reset vector of M4 needs
+ * to exist at 0x0 (TCMUL). The PC and SP are the first two addresses
+ * of that vector.  So to boot M4, the A core must build the M4's reset
+ * vector with getting the PC and SP from image and filling them to
+ * TCMUL. When M4 is kicked, it will load the PC and SP by itself.
+ * The TCMUL is mapped to (M4_BOOTROM_BASE_ADDR) at A core side for
+ * accessing the M4 TCMUL.
+ */
+int arch_auxiliary_core_up(u32 core_id, u32 stack, u32 pc)
 {
-	u32 stack, pc;
-
-	if (!boot_private_data)
-		return 1;
-
-	stack = *(u32 *)boot_private_data;
-	pc = *(u32 *)(boot_private_data + 4);
+	struct src *src_reg = (struct src *)SRC_BASE_ADDR;
 
 	/* Set the stack and pc to M4 bootROM */
 	writel(stack, M4_BOOTROM_BASE_ADDR);
 	writel(pc, M4_BOOTROM_BASE_ADDR + 4);
 
 	/* Enable M4 */
-	setbits_le32(&src_reg->m4rcr, 0x00000008);
-	clrbits_le32(&src_reg->m4rcr, 0x00000001);
+	clrsetbits_le32(&src_reg->m4rcr, SRC_M4RCR_M4C_NON_SCLR_RST_MASK,
+			SRC_M4RCR_ENABLE_M4_MASK);
 
 	return 0;
 }
@@ -277,6 +352,7 @@ int arch_auxiliary_core_up(u32 core_id, u32 boot_private_data)
 int arch_auxiliary_core_check_up(u32 core_id)
 {
 	uint32_t val;
+	struct src *src_reg = (struct src *)SRC_BASE_ADDR;
 
 	val = readl(&src_reg->m4rcr);
 	if (val & 0x00000001)
@@ -284,18 +360,7 @@ int arch_auxiliary_core_check_up(u32 core_id)
 
 	return 1;
 }
-
-void boot_mode_apply(uint32_t cfg_val)
-{
-	uint32_t reg;
-	writel(cfg_val, &src_reg->gpr9);
-	reg = readl(&src_reg->gpr10);
-	if (cfg_val)
-		reg |= 1 << 28;
-	else
-		reg &= ~(1 << 28);
-	writel(reg, &src_reg->gpr10);
-}
+#endif
 
 void set_wdog_reset(struct wdog_regs *wdog)
 {
@@ -322,10 +387,6 @@ void set_wdog_reset(struct wdog_regs *wdog)
  * to SBMR1, which will determine the boot device.
  */
 const struct boot_mode soc_boot_modes[] = {
-#if 0 /* not working as in iMX6 */
-	/* reserved value should start rom usb */
-	{"usb",		MAKE_CFGVAL(0x01, 0x00, 0x00, 0x00)},
-#endif
 	{"ecspi1:0",	MAKE_CFGVAL(0x00, 0x60, 0x00, 0x00)},
 	{"ecspi1:1",	MAKE_CFGVAL(0x40, 0x62, 0x00, 0x00)},
 	{"ecspi1:2",	MAKE_CFGVAL(0x80, 0x64, 0x00, 0x00)},
@@ -371,12 +432,36 @@ enum boot_device get_boot_device(void)
 	case BOOT_TYPE_SPINOR:
 		boot_dev = SPI_NOR_BOOT;
 		break;
+	case BOOT_TYPE_USB_SDP:
+		boot_dev = USB_SDP_BOOT;
+		break;
 	default:
 		break;
 	}
 
 	return boot_dev;
 }
+
+#ifdef CONFIG_ENV_IS_IN_MMC
+__weak int board_mmc_get_env_dev(int devno)
+{
+	return CONFIG_SYS_MMC_ENV_DEV;
+}
+
+int mmc_get_env_dev(void)
+{
+	struct bootrom_sw_info **p =
+		(struct bootrom_sw_info **)ROM_SW_INFO_ADDR;
+	int devno = (*p)->boot_dev_instance;
+	u8 boot_type = (*p)->boot_dev_type;
+
+	/* If not boot from sd/mmc, use default value */
+	if ((boot_type != BOOT_TYPE_SD) && (boot_type != BOOT_TYPE_MMC))
+		return CONFIG_SYS_MMC_ENV_DEV;
+
+	return board_mmc_get_env_dev(devno);
+}
+#endif
 
 void s_init(void)
 {
@@ -400,58 +485,3 @@ void reset_misc(void)
 #endif
 }
 
-#ifdef CONFIG_FSL_FASTBOOT
-
-#ifdef CONFIG_ANDROID_RECOVERY
-#define ANDROID_RECOVERY_BOOT	(1 << 7)
-/*
- * check if the recovery bit is set by kernel, it can be set by kernel
- * issue a command '# reboot recovery'
- */
-int recovery_check_and_clean_flag(void)
-{
-	int flag_set = 0;
-	u32 reg;
-	reg = readl(SNVS_BASE_ADDR + SNVS_LPGPR);
-
-	flag_set = !!(reg & ANDROID_RECOVERY_BOOT);
-	printf("check_and_clean: reg %x, flag_set %d\n", reg, flag_set);
-	/* clean it in case looping infinite here.... */
-	if (flag_set) {
-		reg &= ~ANDROID_RECOVERY_BOOT;
-		writel(reg, SNVS_BASE_ADDR + SNVS_LPGPR);
-	}
-
-	return flag_set;
-}
-#endif /*CONFIG_ANDROID_RECOVERY*/
-
-#define ANDROID_FASTBOOT_BOOT  (1 << 8)
-/*
- * check if the recovery bit is set by kernel, it can be set by kernel
- * issue a command '# reboot fastboot'
- */
-int fastboot_check_and_clean_flag(void)
-{
-	int flag_set = 0;
-	u32 reg;
-
-	reg = readl(SNVS_BASE_ADDR + SNVS_LPGPR);
-
-	flag_set = !!(reg & ANDROID_FASTBOOT_BOOT);
-
-	/* clean it in case looping infinite here.... */
-	if (flag_set) {
-		reg &= ~ANDROID_FASTBOOT_BOOT;
-		writel(reg, SNVS_BASE_ADDR + SNVS_LPGPR);
-	}
-
-	return flag_set;
-}
-
-void fastboot_enable_flag(void)
-{
-	setbits_le32(SNVS_BASE_ADDR + SNVS_LPGPR,
-		ANDROID_FASTBOOT_BOOT);
-}
-#endif /*CONFIG_FSL_FASTBOOT*/

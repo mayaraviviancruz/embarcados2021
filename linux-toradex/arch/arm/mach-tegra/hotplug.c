@@ -1,90 +1,76 @@
 /*
- *  arch/arm/mach-tegra/hotplug.c
- *
- *  Copyright (C) 2010-2011 NVIDIA Corporation
+ *  Copyright (C) 2002 ARM Ltd.
+ *  All Rights Reserved
+ *  Copyright (c) 2010, 2012-2013, NVIDIA Corporation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
  * published by the Free Software Foundation.
  */
+
+#include <linux/clk/tegra.h>
 #include <linux/kernel.h>
-#include <linux/io.h>
 #include <linux/smp.h>
 
-#include <asm/cpu_pm.h>
-#include <asm/cacheflush.h>
+#include <soc/tegra/common.h>
+#include <soc/tegra/fuse.h>
 
-#include <mach/iomap.h>
+#include <asm/smp_plat.h>
 
-#include "gic.h"
 #include "sleep.h"
 
-#define CPU_CLOCK(cpu) (0x1<<(8+cpu))
+static void (*tegra_hotplug_shutdown)(void);
 
-#define CLK_RST_CONTROLLER_CLK_CPU_CMPLX \
-	(IO_ADDRESS(TEGRA_CLK_RESET_BASE) + 0x4c)
-#define CLK_RST_CONTROLLER_RST_CPU_CMPLX_SET \
-	(IO_ADDRESS(TEGRA_CLK_RESET_BASE) + 0x340)
-#define CLK_RST_CONTROLLER_RST_CPU_CMPLX_CLR \
-	(IO_ADDRESS(TEGRA_CLK_RESET_BASE) + 0x344)
-
-#ifdef CONFIG_ARCH_TEGRA_2x_SOC
-/* For Tegra2 use the software-written value of the reset register for status.*/
-#define CLK_RST_CONTROLLER_CPU_CMPLX_STATUS CLK_RST_CONTROLLER_RST_CPU_CMPLX_SET
-#else
-#define CLK_RST_CONTROLLER_CPU_CMPLX_STATUS \
-	(IO_ADDRESS(TEGRA_CLK_RESET_BASE) + 0x470)
-#endif
-
-int platform_cpu_kill(unsigned int cpu)
+int tegra_cpu_kill(unsigned cpu)
 {
-	unsigned int reg;
+	cpu = cpu_logical_map(cpu);
 
-	do {
-		reg = readl(CLK_RST_CONTROLLER_CPU_CMPLX_STATUS);
-		cpu_relax();
-	} while (!(reg & (1<<cpu)));
-
-	reg = readl(CLK_RST_CONTROLLER_CLK_CPU_CMPLX);
-	writel(reg | CPU_CLOCK(cpu), CLK_RST_CONTROLLER_CLK_CPU_CMPLX);
+	/* Clock gate the CPU */
+	tegra_wait_cpu_in_reset(cpu);
+	tegra_disable_cpu_clock(cpu);
 
 	return 1;
 }
 
-void platform_cpu_die(unsigned int cpu)
+/*
+ * platform-specific code to shutdown a CPU
+ *
+ * Called with IRQs disabled
+ */
+void tegra_cpu_die(unsigned int cpu)
 {
-#ifdef CONFIG_ARCH_TEGRA_2x_SOC
-	/* Flush the L1 data cache. */
-	flush_cache_all();
+	if (!tegra_hotplug_shutdown) {
+		WARN(1, "hotplug is not yet initialized\n");
+		return;
+	}
 
-	/* Place the current CPU in reset. */
-	tegra2_hotplug_shutdown();
-#else
-	/* Disable GIC CPU interface for this CPU. */
-	tegra_gic_cpu_disable();
-
-	/* Tegra3 enters LPx states via WFI - do not propagate legacy IRQs
-	   to CPU core to avoid fall through WFI; then GIC output will be
-	   enabled, however at this time - CPU is dying - no interrupt should
-	   have affinity to this CPU. */
-	tegra_gic_pass_through_disable();
-
-	/* Flush the L1 data cache. */
-	flush_cache_all();
+	/* Clean L1 data cache */
+	tegra_disable_clean_inv_dcache(TEGRA_FLUSH_CACHE_LOUIS);
 
 	/* Shut down the current CPU. */
-	tegra3_hotplug_shutdown();
-#endif
+	tegra_hotplug_shutdown();
 
 	/* Should never return here. */
 	BUG();
 }
 
-int platform_cpu_disable(unsigned int cpu)
+static int __init tegra_hotplug_init(void)
 {
-	/*
-	 * we don't allow CPU 0 to be shutdown (it is still too special
-	 * e.g. clock tick interrupts)
-	 */
-	return cpu == 0 ? -EPERM : 0;
+	if (!IS_ENABLED(CONFIG_HOTPLUG_CPU))
+		return 0;
+
+	if (!soc_is_tegra())
+		return 0;
+
+	if (IS_ENABLED(CONFIG_ARCH_TEGRA_2x_SOC) && tegra_get_chip_id() == TEGRA20)
+		tegra_hotplug_shutdown = tegra20_hotplug_shutdown;
+	if (IS_ENABLED(CONFIG_ARCH_TEGRA_3x_SOC) && tegra_get_chip_id() == TEGRA30)
+		tegra_hotplug_shutdown = tegra30_hotplug_shutdown;
+	if (IS_ENABLED(CONFIG_ARCH_TEGRA_114_SOC) && tegra_get_chip_id() == TEGRA114)
+		tegra_hotplug_shutdown = tegra30_hotplug_shutdown;
+	if (IS_ENABLED(CONFIG_ARCH_TEGRA_124_SOC) && tegra_get_chip_id() == TEGRA124)
+		tegra_hotplug_shutdown = tegra30_hotplug_shutdown;
+
+	return 0;
 }
+pure_initcall(tegra_hotplug_init);

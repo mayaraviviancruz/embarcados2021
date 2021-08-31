@@ -19,8 +19,8 @@
  * under normal circumstances, used to verify that nobody uses
  * non-initialized list entries.
  */
-#define LIST_POISON1  ((void *) 0x00100100 + POISON_POINTER_DELTA)
-#define LIST_POISON2  ((void *) 0x00200200 + POISON_POINTER_DELTA)
+#define LIST_POISON1  ((void *) 0x100 + POISON_POINTER_DELTA)
+#define LIST_POISON2  ((void *) 0x200 + POISON_POINTER_DELTA)
 
 /********** include/linux/timer.h **********/
 /*
@@ -39,12 +39,6 @@
  */
 #define	RED_INACTIVE	0x09F911029D74E35BULL	/* when obj is inactive */
 #define	RED_ACTIVE	0xD84156C5635688C0ULL	/* when obj is active */
-
-#ifdef CONFIG_PHYS_ADDR_T_64BIT
-#define MEMBLOCK_INACTIVE	0x3a84fb0144c9e71bULL
-#else
-#define MEMBLOCK_INACTIVE	0x44c9e71bUL
-#endif
 
 #define SLUB_RED_INACTIVE	0xbb
 #define SLUB_RED_ACTIVE		0xcc
@@ -75,10 +69,6 @@
 #define ATM_POISON_FREE		0x12
 #define ATM_POISON		0xdeadbeef
 
-/********** net/ **********/
-#define NEIGHBOR_DEAD		0xdeadbeef
-#define NETFILTER_LINK_POISON	0xdead57ac
-
 /********** kernel/mutexes **********/
 #define MUTEX_DEBUG_INIT	0x11
 #define MUTEX_DEBUG_FREE	0x22
@@ -88,8 +78,5 @@
 
 /********** security/ **********/
 #define KEY_DESTROY		0xbd
-
-/********** sound/oss/ **********/
-#define OSS_POISON_FREE		0xAB
 
 #endif

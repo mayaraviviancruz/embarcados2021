@@ -426,6 +426,9 @@ static int ushc_probe(struct usb_interface *intf, const struct usb_device_id *id
 	struct ushc_data *ushc;
 	int ret;
 
+	if (intf->cur_altsetting->desc.bNumEndpoints < 1)
+		return -ENODEV;
+
 	mmc = mmc_alloc_host(sizeof(struct ushc_data), &intf->dev);
 	if (mmc == NULL)
 		return -ENOMEM;
@@ -504,7 +507,7 @@ static int ushc_probe(struct usb_interface *intf, const struct usb_device_id *id
 		ret = -ENOMEM;
 		goto err;
 	}
-	ushc->csw = kzalloc(sizeof(struct ushc_cbw), GFP_KERNEL);
+	ushc->csw = kzalloc(sizeof(struct ushc_csw), GFP_KERNEL);
 	if (ushc->csw == NULL) {
 		ret = -ENOMEM;
 		goto err;
@@ -562,17 +565,7 @@ static struct usb_driver ushc_driver = {
 	.disconnect = ushc_disconnect,
 };
 
-static int __init ushc_init(void)
-{
-	return usb_register(&ushc_driver);
-}
-module_init(ushc_init);
-
-static void __exit ushc_exit(void)
-{
-	usb_deregister(&ushc_driver);
-}
-module_exit(ushc_exit);
+module_usb_driver(ushc_driver);
 
 MODULE_DESCRIPTION("USB SD Host Controller driver");
 MODULE_AUTHOR("David Vrabel <david.vrabel@csr.com>");

@@ -22,8 +22,12 @@
  */
 #define V4L2_MBUS_MASTER			(1 << 0)
 #define V4L2_MBUS_SLAVE				(1 << 1)
-/* Which signal polarities it supports */
-/* Note: in BT.656 mode HSYNC and VSYNC are unused */
+/*
+ * Signal polarity flags
+ * Note: in BT.656 mode HSYNC, FIELD, and VSYNC are unused
+ * V4L2_MBUS_[HV]SYNC* flags should be also used for specifying
+ * configuration of hardware that uses [HV]REF signals
+ */
 #define V4L2_MBUS_HSYNC_ACTIVE_HIGH		(1 << 2)
 #define V4L2_MBUS_HSYNC_ACTIVE_LOW		(1 << 3)
 #define V4L2_MBUS_VSYNC_ACTIVE_HIGH		(1 << 4)
@@ -32,6 +36,13 @@
 #define V4L2_MBUS_PCLK_SAMPLE_FALLING		(1 << 7)
 #define V4L2_MBUS_DATA_ACTIVE_HIGH		(1 << 8)
 #define V4L2_MBUS_DATA_ACTIVE_LOW		(1 << 9)
+/* FIELD = 0/1 - Field1 (odd)/Field2 (even) */
+#define V4L2_MBUS_FIELD_EVEN_HIGH		(1 << 10)
+/* FIELD = 1/0 - Field1 (odd)/Field2 (even) */
+#define V4L2_MBUS_FIELD_EVEN_LOW		(1 << 11)
+/* Active state of Sync-on-green (SoG) signal, 0/1 for LOW/HIGH respectively. */
+#define V4L2_MBUS_VIDEO_SOG_ACTIVE_HIGH	(1 << 12)
+#define V4L2_MBUS_VIDEO_SOG_ACTIVE_LOW		(1 << 13)
 
 /* Serial flags */
 /* How many lanes the client can use */
@@ -54,7 +65,7 @@
 					 V4L2_MBUS_CSI2_CHANNEL_2 | V4L2_MBUS_CSI2_CHANNEL_3)
 
 /**
- * v4l2_mbus_type - media bus type
+ * enum v4l2_mbus_type - media bus type
  * @V4L2_MBUS_PARALLEL:	parallel interface with hsync and vsync
  * @V4L2_MBUS_BT656:	parallel interface with embedded synchronisation, can
  *			also be used for BT.1120
@@ -67,7 +78,7 @@ enum v4l2_mbus_type {
 };
 
 /**
- * v4l2_mbus_config - media bus configuration
+ * struct v4l2_mbus_config - media bus configuration
  * @type:	in: interface type
  * @flags:	in / out: configuration flags, depending on @type
  */
@@ -83,16 +94,22 @@ static inline void v4l2_fill_pix_format(struct v4l2_pix_format *pix_fmt,
 	pix_fmt->height = mbus_fmt->height;
 	pix_fmt->field = mbus_fmt->field;
 	pix_fmt->colorspace = mbus_fmt->colorspace;
+	pix_fmt->ycbcr_enc = mbus_fmt->ycbcr_enc;
+	pix_fmt->quantization = mbus_fmt->quantization;
+	pix_fmt->xfer_func = mbus_fmt->xfer_func;
 }
 
 static inline void v4l2_fill_mbus_format(struct v4l2_mbus_framefmt *mbus_fmt,
 			   const struct v4l2_pix_format *pix_fmt,
-			   enum v4l2_mbus_pixelcode code)
+			   u32 code)
 {
 	mbus_fmt->width = pix_fmt->width;
 	mbus_fmt->height = pix_fmt->height;
 	mbus_fmt->field = pix_fmt->field;
 	mbus_fmt->colorspace = pix_fmt->colorspace;
+	mbus_fmt->ycbcr_enc = pix_fmt->ycbcr_enc;
+	mbus_fmt->quantization = pix_fmt->quantization;
+	mbus_fmt->xfer_func = pix_fmt->xfer_func;
 	mbus_fmt->code = code;
 }
 

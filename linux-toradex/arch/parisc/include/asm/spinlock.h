@@ -1,7 +1,8 @@
 #ifndef __ASM_SPINLOCK_H
 #define __ASM_SPINLOCK_H
 
-#include <asm/system.h>
+#include <asm/barrier.h>
+#include <asm/ldcw.h>
 #include <asm/processor.h>
 #include <asm/spinlock_types.h>
 
@@ -20,7 +21,6 @@ static inline void arch_spin_lock_flags(arch_spinlock_t *x,
 {
 	volatile unsigned int *a;
 
-	mb();
 	a = __ldcw_align(x);
 	while (__ldcw(a) == 0)
 		while (*a == 0)
@@ -30,16 +30,15 @@ static inline void arch_spin_lock_flags(arch_spinlock_t *x,
 				local_irq_disable();
 			} else
 				cpu_relax();
-	mb();
 }
 
 static inline void arch_spin_unlock(arch_spinlock_t *x)
 {
 	volatile unsigned int *a;
-	mb();
+
 	a = __ldcw_align(x);
-	*a = 1;
 	mb();
+	*a = 1;
 }
 
 static inline int arch_spin_trylock(arch_spinlock_t *x)
@@ -47,10 +46,8 @@ static inline int arch_spin_trylock(arch_spinlock_t *x)
 	volatile unsigned int *a;
 	int ret;
 
-	mb();
 	a = __ldcw_align(x);
         ret = __ldcw(a) != 0;
-	mb();
 
 	return ret;
 }
@@ -189,9 +186,5 @@ static __inline__ int arch_write_can_lock(arch_rwlock_t *rw)
 
 #define arch_read_lock_flags(lock, flags) arch_read_lock(lock)
 #define arch_write_lock_flags(lock, flags) arch_write_lock(lock)
-
-#define arch_spin_relax(lock)	cpu_relax()
-#define arch_read_relax(lock)	cpu_relax()
-#define arch_write_relax(lock)	cpu_relax()
 
 #endif /* __ASM_SPINLOCK_H */
