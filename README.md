@@ -236,13 +236,6 @@ Dessa forma, para criar um nó para a rede CAN é necessário utilizar o OD, iss
 
 <hr>
 
-
-# Configuração de arquivos do CANopenNode
-
-
-
-<hr>
-
 # Referências e outros links:
 
 > Git com os arquivos do CANopenDemo, de onde fizemos o git clone e de onde baseamos este projeto:
