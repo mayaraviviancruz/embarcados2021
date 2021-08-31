@@ -20,13 +20,13 @@
 #include <netdb.h>
 
 
-/////////////////////////////////////////////////VARIÁVEIS GLOBAIS/////////////////////////////////////
+//VARIÁVEIS GLOBAIS
 
 pthread_t id1, id2, id3;
 float posicaoFinal, ddp, erro;
 float coef, correcao;
 
-/////////////////////////////////////////////////FUNÇÕES///////////////////////////////////////////////
+//FUNÇÕES QUE SÃO TRECHOS DAS FUNÇÕES PADRÕES DE THREAD QUE SE ENCONTRAM NO ARQUIVO thread.c
 
 //FUNÇÃO DA PRIMEIRA THREAD
 void * minha_thread_1 (void *apelido) {
@@ -60,6 +60,7 @@ void * minha_thread_3(void *apelido) {
 }
 
 // AQUI O PROGRAMA CONFIGURA AS PORTAS - FUNÇÕES ORIUNDAS DA TORADEX
+
 int portConfig(int argc, char *argv[]){
 	int fd;
 
