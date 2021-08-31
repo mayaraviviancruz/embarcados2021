@@ -2,6 +2,9 @@
 
 <hr>
 
+OBS: não foi possível deletar as pastas u-boot-toradex, tcColibri e linux-toradex do repositório, conforme solicitado. Elas estão dando erro ao tentar deletar.
+
+
 # Configurações iniciais:
 
 Para iniciar o projeto é necessário baixar e configurar o u-boot e o kernel linux.
