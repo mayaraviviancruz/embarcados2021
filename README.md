@@ -225,21 +225,21 @@ Por fim, basta apertar enter para conferir que o mestre está recebendo os PDOs
 
 # Conexão:
 
+A partir de agora utilizaremos a comunicação com base no CANopenNode tutorial, o qual se encontra na pasta do nosso repositório.
+Para fazer o CANopenNode funcionar é preciso a função cocomm no terminal.
 Por meio do Script config.sh teremos o CAN Bus virtual e poderemos inicializar os 3 nós para o uso do comando cocomm. As threads foram utilizadas para permitir a comunicação e é possível integrar os scripts que usam essas threads aos códigos em C.
+Para o nosso projeto os Index e SubIndex a serem utilizados deverão seguir os padrões da Maxxon, conforme segue:
 
+![image](https://user-images.githubusercontent.com/78976475/131531150-df3fa1d4-0bf9-47b5-9189-49a8015e2d05.png)
 
-# Configuração pata a habilitação das conexões:
-Para efetuar a conexão basta realizar o download da toolchain , assim será possível compilar no formato do colibri. Em seguida é necessário baixar e editar os arquivos a serem compilados e definir o Kernel.
-
-
+Dessa forma, para criar um nó para a rede CAN é necessário utilizar o OD, isso aumenta a liberdade para as capacidades dos nós. Depois disso, é preciso alterar os valores dos parâmetros de comunicação PDO e os de mapeamento PDO.  Os valores são 1400(4) e 1800(4) seguido de 1600(4) e 1A00(4) respectivamente. 
 
 <hr>
 
 
 # Configuração de arquivos do CANopenNode
 
-Para fazer o CANopenNode funcionar é preciso a função cocomm no terminal  como segue abaixo:
-Para criar um nó para a rede CAN utilize o OD, isso aumenta a liberdade para as capacidades dos nós. Depois disso, altere os valores dos parâmetros de comunicação PDO e os de mapeamento PDO.  valores 1400(4) e 1800(4) seguido de 1600(4) e 1A00(4) respectivamente. 
+
 
 <hr>
 
