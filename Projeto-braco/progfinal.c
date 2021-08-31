@@ -5,7 +5,7 @@
 #include <stdio.h>
 #include <math.h>
 
-//funcao oriunda do protocolo de conversao
+//funcao padrão oriunda do protocolo de conversão para obtenção do formato desejado da string
 
 pthread_t id0, id1, id2, id3;
 int flag = 1;
@@ -107,7 +107,7 @@ void prtcl(char net[4],int ndId, char rw[5], char index[4], char subindex[2], in
   system(call);
 }
 
-// Protocolo de threads:
+// Protocolo de threads oriundo do arquivo threads.c:
 
 
 void * iniciate (void *apelido) {
@@ -148,7 +148,7 @@ void * minha_thread_3(void *apelido) {
 }
 
 
-// criação de threads 
+// função padrão do protocolo de threads oriunda do arquvo threads.c 
 
 
 int main(int argc, char *argv[]) {
