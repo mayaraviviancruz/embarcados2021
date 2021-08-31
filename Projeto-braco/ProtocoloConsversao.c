@@ -1,10 +1,11 @@
+// Protocolo de conversão padrão que será utilizado no programa final
+
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <math.h>
 #include <string.h>
-
-// Protocolo de conversão padrão que será utilizado no programa final
 
 
 void prtcl(char net[4],int ndId, char rw[5], char index[4], char subindex[2], int valor) {
