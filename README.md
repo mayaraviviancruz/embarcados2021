@@ -233,6 +233,7 @@ Para o nosso projeto os Index e SubIndex a serem utilizados deverão seguir os p
 ![image](https://user-images.githubusercontent.com/78976475/131531150-df3fa1d4-0bf9-47b5-9189-49a8015e2d05.png)
 
 Dessa forma, para criar um nó para a rede CAN é necessário utilizar o OD, isso aumenta a liberdade para as capacidades dos nós. Depois disso, é preciso alterar os valores dos parâmetros de comunicação PDO e os de mapeamento PDO.  Os valores são 1400(4) e 1800(4) seguido de 1600(4) e 1A00(4) respectivamente. 
+Para maiores informações acesse o link sobre aplicação de CANopen no EPOS2, que se encontra no final deste readme
 
 <hr>
 # Arquivo do projeto final:
@@ -252,6 +253,9 @@ No final das contas não foi possível rodar os códigos, portanto não é poss�
 
 >Onde vimos como usar o CAN no Colibri:
 >https://developer.toradex.com/knowledge-base/can-controller-area-network-on-colibri-module#CAN_on_Colibri_VFxx
+>
+>Notas de aplicação do CANopen no EPOS2 da Maxxon:
+>https://www.maxongroup.com/medias/sys_master/root/8834322759710/EPOS2-Application-Notes-Collection-En.pdf
 
 > Habilitação do CAN na toradex Colibri VFxx <br>
 > https://developer.toradex.com/knowledge-base/can-linux#Kernel_Support_Colibri_VFxx
@@ -260,7 +264,7 @@ No final das contas não foi possível rodar os códigos, portanto não é poss�
 > https://developer.toradex.com/knowledge-base/build-u-boot-and-linux-kernel-from-source-code
 
 > Este projeto foi feito em parceria com o de outro grupo de colegas da turma =D
-https://github.com/KingCoolgate/projetoEmbarcados2021
+> https://github.com/KingCoolgate/projetoEmbarcados2021
 
 
 *OBS: não foi possível deletar as pastas u-boot-toradex, tcColibri e linux-toradex do repositório, conforme solicitado. Elas estão dando erro ao tentar deletar.
